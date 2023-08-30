@@ -92,7 +92,7 @@ PLATFORM_NAMES = {
     'wonderswan': ['ws', 'bandai wonderswan'],
     'wonderswan color': ['wsc', 'bandai wonderswan color'],
     'xbox': ['xb', 'microsoft xbox'],
-    'xbox 360': ['360', 'x360', 'microsoft xbox 360'],
+    'xbox 360': ['360', 'x360', 'microsoft xbox 360', 'xbla', 'xbox live arcade', 'xblig', 'xbox live indie games'],
     'xbox one': ['xone', 'microsoft xbox one'],
     'xbox series x|s': ['xbox series', 'xbox series x/s' 'xbsx', 'xbox series x', 'xbox series s'],
     'zx spectrum': ['spectrum', 'zx', 'sinclair zx81/spectrum', 'sinclair zx spectrum'],

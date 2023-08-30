@@ -19,6 +19,12 @@ class MetacriticGame:
         self.platform = platform
         self.score = score
 
+    def __str__(self):
+        return f'{self.title} ({self.platform}) - {self.score}{"%" if self.score != "tbd" else ""}'
+
+    def __repr__(self):
+        return self.__str__()
+
 class MetacriticClient:
     __BASE_METACRITIC_URL = 'https://www.metacritic.com'
     __METACRITIC_HEADERS = {

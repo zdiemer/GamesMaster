@@ -40,7 +40,7 @@ def parse_excel(sheet: str = 'Games') -> pd.DataFrame:
     return pd.read_excel('static/games.xlsx', sheet_name=sheet, keep_default_na=False)
 
 def get_match_option_selection(source: str, game: ExcelGame, options: List, renderer: Callable[[Any], str]) -> int:
-    print(f'\nMultiple matches {source} detected:\n')
+    print(f'\nMultiple matches on {source} detected:\n')
     for i, option in enumerate(options):
         print(f'{i+1}. {renderer(option)}')
     release = game.release_date.year if game.release_date is not None else 'Early Access'
@@ -60,7 +60,7 @@ async def search_game_mappings(games: pd.DataFrame):
 
     matches: List[GameMatch] = []
 
-    for _, row in games.sample(100).iterrows():
+    for _, row in games.sample(50).iterrows():
         match: GameMatch = GameMatch()
         game = ExcelGame(
             row['Title'],
@@ -155,14 +155,17 @@ def search_steam(game: ExcelGame, api_key: str):
         return []
 
     steam = Steam(api_key)
-    results = steam.apps.search_games(game.title)
-    matches = []
+    try:
+        results = steam.apps.search_games(game.title)
+        matches = []
 
-    for r in results['apps']:
-        if titles_equal_normalized(r['name'], game.title):
-            matches.append(r)
+        for r in results['apps']:
+            if titles_equal_normalized(r['name'], game.title):
+                matches.append(r)
 
-    return matches
+        return matches
+    except ValueError as e:
+        return []
     
 
 if __name__ == '__main__':

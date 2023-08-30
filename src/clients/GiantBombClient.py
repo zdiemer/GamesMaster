@@ -15,19 +15,20 @@ class GiantBombFormat(Enum):
 
 class GiantBombClient:
     __BASE_GIANTBOMB_URL = 'https://www.giantbomb.com/api'
-    __HEADERS = {"User-Agent": f'GamesMaster List'}
+    __headers = {}
 
     __api_key: str
 
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, user_agent: str):
         self.__api_key = api_key
+        self.__headers = {'User-Agent': user_agent}
 
     @staticmethod
     async def create(config: Config = None) -> GiantBombClient:
         if config is None:
             config = Config.create()
         
-        return GiantBombClient(config.giant_bomb_api_key)
+        return GiantBombClient(config.giant_bomb_api_key, config.user_agent)
     
     async def _make_request(self, route: str, params: Dict, format: GiantBombFormat):
         if params.get('api_key') is None:
@@ -39,7 +40,7 @@ class GiantBombClient:
         encoded_params = urllib.parse.urlencode(params)
         url = f'{self.__BASE_GIANTBOMB_URL}/{route}?{encoded_params}'
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=self.__HEADERS) as res:
+            async with session.get(url, headers=self.__headers) as res:
                 return await res.json()
             
     async def search(self, query: str, format: GiantBombFormat = GiantBombFormat.JSON):
