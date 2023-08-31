@@ -1,18 +1,15 @@
 from __future__ import annotations
 
 import aiohttp
-import asyncio
-import unicodedata
 import urllib.parse
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Literal
+from typing import Dict, Literal
 
 from bs4 import BeautifulSoup
 
-from config import Config
 from excel_game import ExcelGame, ExcelRegion
-from helpers import titles_equal_normalized
+from helpers import titles_equal_fuzzy
 
 class Category(Enum):
     FULLY_PLAYABLE = 1
@@ -197,7 +194,7 @@ class RomHackingClient:
             version = r.find('td', {'class': 'col_6'}).text.strip()
             translation_release = datetime.strptime(r.find('td', {'class': 'col_7'}).text.strip(), '%d %b %Y')
 
-            if titles_equal_normalized(name, game.title):
+            if titles_equal_fuzzy(name, game.title):
                 matches.append({
                     'name': name,
                     'url': f'{self.__BASE_ROM_HACKING_URL}{url}',

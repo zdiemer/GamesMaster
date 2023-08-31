@@ -9,8 +9,8 @@ from typing import Dict, List
 
 from bs4 import BeautifulSoup
 
-from excel_game import ExcelGame as ExcelGame
-from helpers import validate
+from excel_game import ExcelGame
+from match_validator import MatchValidator
 
 class GameFaqsPlatform:
     name: str
@@ -327,12 +327,19 @@ class GameFaqsClient:
     async def match_game(self, game: ExcelGame):
         results = await self.home_game_search(game.title)
         matches = []
+        only_exacts = False
+        validator = MatchValidator()
 
         for r in results:
             if r.get('footer'):
                 continue
             if r.get('game_name') and r.get('plats'):
-                if validate(game, r['game_name'], r['plats'].split(', ')):
+                match = validator.validate(game, r['game_name'], r['plats'].split(', '))
+                if match.matched:
+                    if match.exact:
+                        only_exacts = True
+                    elif only_exacts:
+                        continue
                     matches.append(r)
 
         return matches

@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List
 
 from config import Config
-from excel_game import ExcelGame as ExcelGame
+from excel_game import ExcelGame
 from helpers import validate
 
 class IgdbClient:

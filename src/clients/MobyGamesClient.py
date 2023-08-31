@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import aiohttp
 import asyncio
+import html
 import urllib.parse
 from datetime import datetime, timedelta
 from typing import Dict, List, Literal, NamedTuple
@@ -267,7 +268,7 @@ class MobyGamesClient:
                         screenshot['thumbnail_image'],
                         screenshot['width']
                     ) for screenshot in game['sample_screenshots']],
-                    game['title']
+                    html.unescape(game['title'])
                 ) for game in res['games']
             ]
         except KeyError:

@@ -11,13 +11,14 @@ from helpers import validate
 class MetacriticGame:
     title: str
     platform: str
-    score: int | Literal['tbd']
+    score: int
     url: str
 
-    def __init__(self, title: str, platform: str, score: int | Literal['tbd'], url: str):
+    def __init__(self, title: str, platform: str, score: int, url: str):
         self.title = title
         self.platform = platform
         self.score = score
+        self.url = url
 
 class MetacriticClient:
     __BASE_METACRITIC_URL = 'https://www.metacritic.com'
@@ -60,12 +61,14 @@ class MetacriticClient:
             platform = r.p.span.text.strip()
             score = r.span.text.strip()
             url = r.h3.a['href']
+            if score == 'tbd':
+                continue
             if validate(game, title, [platform]):
                 matches.append(
                     MetacriticGame(
                         title,
                         platform,
-                        int(score) if score != 'tbd' else score,
+                        int(score),
                         f'{self.__BASE_METACRITIC_URL}{url}'))
 
         return matches

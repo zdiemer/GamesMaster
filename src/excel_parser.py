@@ -65,7 +65,7 @@ async def search_game_mappings(games: pd.DataFrame):
 
     matches: List[GameMatch] = []
 
-    for _, row in games.loc[games['Release Region'] == Region.JAPAN.value].sample(100).iterrows():
+    for _, row in games.loc[(games['Metacritic Rating'] == '') & (games['GameFAQs User Rating'] == '')].sample(100).iterrows():
         match: GameMatch = GameMatch()
         game = ExcelGame(
             row['Title'],

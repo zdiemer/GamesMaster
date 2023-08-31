@@ -6,8 +6,8 @@ from enum import Enum
 from typing import Dict
 
 from config import Config
-from excel_game import ExcelGame as ExcelGame
-from helpers import validate
+from excel_game import ExcelGame
+from match_validator import MatchValidator
 
 class GiantBombFormat(Enum):
     JSON = 'json'
@@ -49,12 +49,19 @@ class GiantBombClient:
     async def match_game(self, game: ExcelGame):
         results = await self.search(game.title)
         matches = []
+        only_exact = False
+        validator = MatchValidator()
 
         for r in results['results']:
             if r.get('platforms') is None:
                 continue
             platforms = [p['name'] for p in r['platforms']]
-            if validate(game, r['name'], platforms):
+            match = validator.validate(game, r['name'], platforms):
+            if match.matched:
+                if match.exact:
+                    only_exact = True
+                elif only_exact:
+                    continue
                 matches.append(r)
             elif r.get('aliases') is not None:
                 if any(validate(game, alias, platforms) for alias in r['aliases'].split('\n')):
