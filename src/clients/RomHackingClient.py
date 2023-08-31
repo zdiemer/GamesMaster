@@ -9,7 +9,7 @@ from typing import Dict, Literal
 from bs4 import BeautifulSoup
 
 from excel_game import ExcelGame, ExcelRegion
-from helpers import titles_equal_fuzzy
+from match_validator import MatchValidator
 
 class Category(Enum):
     FULLY_PLAYABLE = 1
@@ -181,6 +181,7 @@ class RomHackingClient:
         soup = BeautifulSoup(text, 'html.parser')
         results = soup.find_all('tr', {'class': 'even', 'class': 'odd'})
         matches = []
+        validator = MatchValidator()
 
         for r in results:
             title = r.find('td', {'class': 'col_1'})
@@ -194,7 +195,7 @@ class RomHackingClient:
             version = r.find('td', {'class': 'col_6'}).text.strip()
             translation_release = datetime.strptime(r.find('td', {'class': 'col_7'}).text.strip(), '%d %b %Y')
 
-            if titles_equal_fuzzy(name, game.title):
+            if validator.titles_equal_fuzzy(name, game.title):
                 matches.append({
                     'name': name,
                     'url': f'{self.__BASE_ROM_HACKING_URL}{url}',
