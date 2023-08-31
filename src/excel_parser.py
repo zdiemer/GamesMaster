@@ -12,6 +12,7 @@ from clients.GiantBombClient import GiantBombClient
 from clients.IgdbClient import IgdbClient
 from clients.MetacriticClient import MetacriticClient, MetacriticGame
 from clients.MobyGamesClient import MobyGamesClient
+from clients.RomHackingClient import RomHackingClient
 
 class GameMatch:
     igdb_id: int
@@ -20,6 +21,7 @@ class GameMatch:
     steam_app_id: int
     hltb_id: int
     metacritic_info: MetacriticGame
+    romhacking_info: any
 
     def __init__(
             self,
@@ -28,13 +30,15 @@ class GameMatch:
             mobygames_id: int = None,
             steam_app_id: int = None,
             hltb_id: int = None,
-            metacritic_info: MetacriticGame = None):
+            metacritic_info: MetacriticGame = None,
+            romhacking_info = None):
         self.igdb_id = igdb_id
         self.giantbomb_id = giantbomb_id
         self.mobygames_id = mobygames_id
         self.steam_app_id = steam_app_id
         self.hltb_id = hltb_id
         self.metacritic_info = metacritic_info
+        self.romhacking_info = romhacking_info
 
 def parse_excel(sheet: str = 'Games') -> pd.DataFrame:
     return pd.read_excel('static/games.xlsx', sheet_name=sheet, keep_default_na=False)
@@ -57,10 +61,11 @@ async def search_game_mappings(games: pd.DataFrame):
     gb_client = await GiantBombClient.create(config)
     mb_client = await MobyGamesClient.create(config)
     mc_client = MetacriticClient.create()
+    rh_client = RomHackingClient.create()
 
     matches: List[GameMatch] = []
 
-    for _, row in games.sample(50).iterrows():
+    for _, row in games.loc[games['Release Region'] == Region.JAPAN.value].sample(100).iterrows():
         match: GameMatch = GameMatch()
         game = ExcelGame(
             row['Title'],
@@ -74,6 +79,7 @@ async def search_game_mappings(games: pd.DataFrame):
             row['Notes']
         )
         print(f'Processing {game.title} ({game.platform}) [{game.release_date.year if game.release_date is not None else "Early Access"}]...')
+
 
         igdb_matches = await igdb_client.match_game(game)
 
@@ -129,9 +135,20 @@ async def search_game_mappings(games: pd.DataFrame):
         elif len(meta_matches) == 1:
             match.metacritic_info = meta_matches[0]
 
+        rh_matches = await rh_client.match_game(game)
+
+        if len(rh_matches) > 1:
+            selection = get_match_option_selection(
+                'RomHacking', game, rh_matches, lambda m: f'{m["name"]} ({m["url"]})')
+            match.romhacking_info = rh_matches[selection]
+        elif len(rh_matches) == 1:
+            print(rh_matches[0])
+            match.romhacking_info = rh_matches[0]
+
         if not match.igdb_id and not match.giantbomb_id \
                 and not match.mobygames_id and not match.steam_app_id \
-                and not match.hltb_id and not match.metacritic_info:
+                and not match.hltb_id and not match.metacritic_info \
+                and not match.romhacking_info:
             print(f'No matches detected... :(')
             continue
 

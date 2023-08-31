@@ -5,7 +5,7 @@ from typing import List, Literal
 
 from bs4 import BeautifulSoup
 
-from excel_game import ExcelGame as ExcelGame, ExcelRegion as Region
+from excel_game import ExcelGame, ExcelRegion as Region
 from helpers import validate
 
 class MetacriticGame:
@@ -18,12 +18,6 @@ class MetacriticGame:
         self.title = title
         self.platform = platform
         self.score = score
-
-    def __str__(self):
-        return f'{self.title} ({self.platform}) - {self.score}{"%" if self.score != "tbd" else ""}'
-
-    def __repr__(self):
-        return self.__str__()
 
 class MetacriticClient:
     __BASE_METACRITIC_URL = 'https://www.metacritic.com'

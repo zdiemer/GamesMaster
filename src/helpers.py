@@ -11,6 +11,9 @@ def titles_equal_normalized(t1: str, t2: str):
         return False
     return normalize(t1) == normalize(t2)
 
+def romanize(s: str):
+    return s.replace('ō', 'ou').replace('ū', 'uu').replace('Ō', 'Ou').replace('Ū', 'Uu')
+
 def normalize(s: str):
     return ''.join(
         filter(
@@ -18,7 +21,7 @@ def normalize(s: str):
             unicodedata.normalize(
                 'NFKD',
                 re.sub(
-                    r'( \([0-9]{4}\))', '', html.unescape(s).casefold().replace('&', 'and'))).strip()))
+                    r'( \([0-9]{4}\))', '', html.unescape(romanize(s)).casefold().replace('&', 'and'))).strip()))
 
 def validate(game: ExcelGame, title: str, platforms: List[str]):
     return titles_equal_normalized(game.title, title) \
