@@ -1,0 +1,8 @@
+pandas
+howlongtobeatpy
+python-steam-api
+eventemitter
+gevent
+bs4
+edit-distance
+openpyxl

@@ -1,2 +1,5 @@
 **/__pycache__
 static/config.json
+
+# pyenv
+.python-version
