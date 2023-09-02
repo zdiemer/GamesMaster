@@ -4,7 +4,7 @@
 
 ```sh
 # build the images
-$ docker compose -f docker-compose.dev.yaml build
+$ docker compose -f docker-compose.dev.yaml --env-file ./dev.env build
 
 # view the config
 $ docker compose -f docker-compose.dev.yaml --env-file ./dev.env config

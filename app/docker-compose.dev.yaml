@@ -16,8 +16,9 @@ services:
       retries: 10
     volumes:
       - mysql_volume:/var/lib/mysql
-      - ./db/01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
-      - ./db/02_testdata.sql:/docker-entrypoint-initdb.d/02_testdata.sql
+      - ./db:/docker-entrypoint-initdb.d
+      # - ./db/01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      # - ./db/02_testdata.sql:/docker-entrypoint-initdb.d/02_testdata.sql
     ports:
       - "${DB_PORT}:${DB_PORT}"
   # Development only.   
