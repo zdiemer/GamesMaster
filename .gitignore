@@ -3,3 +3,6 @@ static/config.json
 
 # pyenv
 .python-version
+
+# app
+app/.env
