@@ -6,3 +6,5 @@ static/config.json
 
 # app
 app/.env
+# No need to commit twice, the games.csv is good enough to generate it.
+app/db/03_parsed_data.sql
