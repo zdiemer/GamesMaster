@@ -20,7 +20,7 @@ with open('static/games.csv', newline='') as csvfile:
                 row["early_access"] = "TRUE"
             else:
                 datestr = datetime.strptime(rls_date, '%m/%d/%Y').strftime('%Y-%m-%d')
-                row["processed_rls_date"] = '"%s"' % (datestr)
+                row["processed_rls_date"] = f'"{datestr}"'
                 row["early_access"] = "DEFAULT"
 
             row["rls_region"] = row["Release Region"]
@@ -37,7 +37,7 @@ with open('static/games.csv', newline='') as csvfile:
                 row["processed_purchase_date"] = "NULL"
             else:
                 datestr = datetime.strptime(prch_date, '%m/%d/%Y').strftime('%Y-%m-%d')
-                row["processed_purchase_date"] = '"%s"' % (datestr)
+                row["processed_purchase_date"] = f'"{datestr}"'
 
             prch_price = row[" Purchase Price "]
             if prch_price == "" or prch_price == " $ -   ":
@@ -59,25 +59,28 @@ with open('static/games.csv', newline='') as csvfile:
             else:
                 try:
                     datestr = datetime.strptime(cmplt_date, '%m/%d/%Y').strftime('%Y-%m-%d')
-                    row["processed_cmplt_date"] = '"%s"' % (datestr)
+                    row["processed_cmplt_date"] = f'"{datestr}"'
                 except ValueError:
                     datestr = datetime.strptime(cmplt_date, '%m/%Y').strftime('%Y-%m')
-                    row["processed_cmplt_date"] = '"%s"' % (datestr)
+                    row["processed_cmplt_date"] = f'"{datestr}"'
 
             cmplt_time = row["Completion Time"]
             if cmplt_time == "":
                 row["cmplt_time"] = "NULL"
             else:
                 row["cmplt_time"] = float(cmplt_time)
-
-            row["Rating"] = float(row["Rating"].replace("%", "") if row["Rating"] else 0) / 100
+            
+            if row["Rating"]:
+                row["Rating"] = float(row["Rating"].replace("%", "")) / 100
+            else:
+                row["Rating"] = "NULL"
             row["metacritic_rating"] = float(row["Metacritic Rating"].replace("%", "") if row["Metacritic Rating"] else 0) / 100
             row["gamefaqs_rating"] = float(row["GameFAQs User Rating"].replace("%", "") if row["GameFAQs User Rating"] else 0) / 100
 
-            row["Priority"] = float(row["Priority"]) if row["Priority"] else 0
+            row["Priority"] = float(row["Priority"]) if row["Priority"] else "NULL"
             row["Wishlisted"] = "TRUE" if row["Wishlisted"] == 1 else "FALSE"
 
-            row["est_time"] = float(row["Estimated Time"]) if  not row["Estimated Time"] == " " and not row["Estimated Time"] == "" else 0
+            row["est_time"] = float(row["Estimated Time"]) if not row["Estimated Time"] == " " and not row["Estimated Time"] == "" else "NULL"
 
             row["processed_play_status"] = int(row["Playing Status"]) if row["Playing Status"] else 0
 
@@ -88,9 +91,5 @@ with open('static/games.csv', newline='') as csvfile:
             else:
                 row["processed_rls_year"] = int(rls_year)
 
-            row["weighted_score"] = float(row["Weighted Score"].replace("%", "") if row["Weighted Score"] else 0) / 100
-            row["composite_score"] = float(row["Composite Score"].replace("%", "") if row["Composite Score"] else 0) / 100
-            row["z_score"] = float(row["My Score"].replace("%", "") if row["My Score"] else 0) / 100
-
             f.write('INSERT INTO games VALUES (%s);\n' % (
-                '"{id}", "{Title}", "{Platform}", {processed_rls_date}, {early_access}, "{rls_region}", "{Publisher}", "{Developer}", "{Franchise}", "{Genre}", {VR}, {DLC}, {English}, {Owned}, "{Condition}", {processed_purchase_date}, {processed_purchase_price}, {processed_format}, {Completed}, {processed_cmplt_date}, {cmplt_time}, {Rating}, {metacritic_rating}, {gamefaqs_rating}, "{Notes}", {Priority}, {Wishlisted}, {est_time}, {processed_play_status}, {processed_rls_year}, {weighted_score}, {composite_score}, {z_score}'.format_map(row)))
+                '"{id}", "{Title}", "{Platform}", {processed_rls_date}, {early_access}, "{rls_region}", "{Publisher}", "{Developer}", "{Franchise}", "{Genre}", {VR}, {DLC}, {English}, {Owned}, "{Condition}", {processed_purchase_date}, {processed_purchase_price}, {processed_format}, {Completed}, {processed_cmplt_date}, {cmplt_time}, {Rating}, {metacritic_rating}, {gamefaqs_rating}, "{Notes}", {Priority}, {Wishlisted}, {est_time}, {processed_play_status}, {processed_rls_year}'.format_map(row)))

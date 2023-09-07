@@ -28,8 +28,5 @@ INSERT INTO games VALUES (
     DEFAULT, -- wishlist
     NULL, -- est time
     DEFAULT, -- playing status
-    2023,
-    99.99,
-    "0.99",
-    "1"
+    2023
     );
