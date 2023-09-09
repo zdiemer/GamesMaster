@@ -1,0 +1,6 @@
+pandas
+howlongtobeatpy
+python-steam-api
+bs4
+edit-distance
+openpyxl
