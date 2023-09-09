@@ -49,6 +49,7 @@ class MatchValidator:
         return s.replace("ō", "o").replace("ū", "u").replace("Ō", "O").replace("Ū", "U")
 
     def normalize(self, s: str) -> str:
+        # TODO: Handle starting The
         if s in self.__cached_normalization:
             return self.__cached_normalization[s]
         normalized = "".join(
