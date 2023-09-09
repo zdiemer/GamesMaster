@@ -178,6 +178,7 @@ class MobyGamesClient:
         if self.__next_call > datetime.utcnow():
             delta = self.__next_call - datetime.utcnow()
             sleep_time_seconds = delta.seconds + (delta.microseconds / 1_000_000.0)
+            print(f"Sleeping {sleep_time_seconds:,.2f}s for MobyGames")
             await asyncio.sleep(sleep_time_seconds)
 
         self.__next_call = datetime.utcnow() + timedelta(seconds=10)

@@ -58,6 +58,7 @@ class IgdbClient:
     async def _make_request(self, route: str, data: str):
         cur_sec = datetime.utcnow().second
         if self.__requests_per_second.get(cur_sec) == 4:
+            print("Sleeping 1s for IGDB")
             await asyncio.sleep(1)
             self.__requests_per_second.clear()
         elif self.__requests_per_second.get(cur_sec) == 0:
@@ -128,7 +129,12 @@ class IgdbClient:
             for date_response in date_responses:
                 if len(date_response) != 1 or date_response[0].get("date") is None:
                     continue
-                release_years.append(datetime.fromtimestamp(date_response[0]["date"]))
+                release_years.append(
+                    datetime.fromtimestamp(date_response[0]["date"]).year
+                )
+
+            if not any(release_years):
+                continue
 
             match = validator.validate(
                 game, r.get("name"), platforms_processed, release_years

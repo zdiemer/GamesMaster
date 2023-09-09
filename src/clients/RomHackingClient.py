@@ -11,10 +11,12 @@ from bs4 import BeautifulSoup
 from excel_game import ExcelGame, ExcelRegion
 from match_validator import MatchValidator
 
+
 class Category(Enum):
     FULLY_PLAYABLE = 1
     UNFINISHED = 2
     ADDENDUM = 4
+
 
 class Platform(Enum):
     _3DO = 46
@@ -70,68 +72,71 @@ class Platform(Enum):
     XBOX = 38
     XBOX_360 = 48
 
+
 class Language(Enum):
     ENGLISH = 12
+
 
 class OrderBy(Enum):
     ASCENDING = 0
     DESCENDING = 1
 
+
 class RomHackingClient:
-    __BASE_ROM_HACKING_URL = 'https://www.romhacking.net'
+    __BASE_ROM_HACKING_URL = "https://www.romhacking.net"
 
     __PLATFORM_ID_MAPPINGS = {
-        '3do': Platform._3DO,
-        'arcade': Platform.ARCADE,
-        'atari 2600': Platform.ATARI_2600,
-        'atari 7800': Platform.ATARI_7800,
-        'atari jaguar': Platform.ATARI_JAGUAR,
-        'atari lynx': Platform.ATARI_LYNX,
-        'colecovision': Platform.COLECOVISION,
-        'sega dreamcast': Platform.DREAMCAST,
-        'famicom disk system': Platform.FAMILY_COMPUTER_DISK_SYSTEM,
-        'game boy': Platform.GAME_BOY,
-        'game boy color': Platform.GAME_BOY,
-        'game boy advance': Platform.GAME_BOY_ADVANCE,
-        'msx': Platform.MSX,
-        'msx2': Platform.MSX,
-        'neo-geo cd': Platform.NEO_GEO_CD,
-        'neo-geo pocket color': Platform.NEO_GEO_POCKET_COLOR,
-        'nintendo 3ds': Platform.NINTENDO_3DS,
-        'nintendo 64': Platform.NINTENDO_64,
-        'nintendo ds': Platform.NINTENDO_DS,
-        'nes': Platform.NINTENDO_ENTERTAINMENT_SYSTEM,
-        'nintendo gamecube': Platform.NINTENDO_GAMECUBE,
-        'pc': Platform.PC,
-        'nec pc-8801': Platform.PC_8X01,
-        'nec pc-9801': Platform.PC_98,
-        'pc-fx': Platform.PC_FX,
-        'philips cd-i': Platform.PHILIPS_CD_I,
-        'playstation': Platform.PLAYSTATION,
-        'playstation 2': Platform.PLAYSTATION_2,
-        'playstation 3': Platform.PLAYSTATION_3,
-        'playstation portable': Platform.PLAYSTATION_PORTABLE,
-        'playstation vita': Platform.PLAYSTATION_VITA,
-        'nintendo pokémon mini': Platform.POKEMON_MINI,
-        'sega 32x': Platform.SEGA_32X,
-        'sega cd': Platform.SEGA_CD,
-        'sega game gear': Platform.SEGA_GAME_GEAR,
-        'sega genesis': Platform.SEGA_GENESIS,
-        'sega master system': Platform.SEGA_MASTER_SYSTEM,
-        'sega saturn': Platform.SEGA_SATURN,
-        'sega sg-1000': Platform.SG_1000_SC_3000,
-        'snes': Platform.SUPER_NINTENDO,
-        'turbografx-16': Platform.TURBOGRAFX_16,
-        'turbografx-cd': Platform.TURBOGRAFX_CD,
-        'virtual boy': Platform.VIRTUAL_BOY,
-        'nintendo wii': Platform.WII,
-        'wiiware': Platform.WII,
-        'nintendo wii u': Platform.WII_U,
-        'wonderswan': Platform.WONDERSWAN,
-        'wonderswan color': Platform.WONDERSWAN,
-        'sharp x68000': Platform.X68000,
-        'xbox': Platform.XBOX,
-        'xbox 360': Platform.XBOX_360
+        "3do": Platform._3DO,
+        "arcade": Platform.ARCADE,
+        "atari 2600": Platform.ATARI_2600,
+        "atari 7800": Platform.ATARI_7800,
+        "atari jaguar": Platform.ATARI_JAGUAR,
+        "atari lynx": Platform.ATARI_LYNX,
+        "colecovision": Platform.COLECOVISION,
+        "sega dreamcast": Platform.DREAMCAST,
+        "famicom disk system": Platform.FAMILY_COMPUTER_DISK_SYSTEM,
+        "game boy": Platform.GAME_BOY,
+        "game boy color": Platform.GAME_BOY,
+        "game boy advance": Platform.GAME_BOY_ADVANCE,
+        "msx": Platform.MSX,
+        "msx2": Platform.MSX,
+        "neo-geo cd": Platform.NEO_GEO_CD,
+        "neo-geo pocket color": Platform.NEO_GEO_POCKET_COLOR,
+        "nintendo 3ds": Platform.NINTENDO_3DS,
+        "nintendo 64": Platform.NINTENDO_64,
+        "nintendo ds": Platform.NINTENDO_DS,
+        "nes": Platform.NINTENDO_ENTERTAINMENT_SYSTEM,
+        "nintendo gamecube": Platform.NINTENDO_GAMECUBE,
+        "pc": Platform.PC,
+        "nec pc-8801": Platform.PC_8X01,
+        "nec pc-9801": Platform.PC_98,
+        "pc-fx": Platform.PC_FX,
+        "philips cd-i": Platform.PHILIPS_CD_I,
+        "playstation": Platform.PLAYSTATION,
+        "playstation 2": Platform.PLAYSTATION_2,
+        "playstation 3": Platform.PLAYSTATION_3,
+        "playstation portable": Platform.PLAYSTATION_PORTABLE,
+        "playstation vita": Platform.PLAYSTATION_VITA,
+        "nintendo pokémon mini": Platform.POKEMON_MINI,
+        "sega 32x": Platform.SEGA_32X,
+        "sega cd": Platform.SEGA_CD,
+        "sega game gear": Platform.SEGA_GAME_GEAR,
+        "sega genesis": Platform.SEGA_GENESIS,
+        "sega master system": Platform.SEGA_MASTER_SYSTEM,
+        "sega saturn": Platform.SEGA_SATURN,
+        "sega sg-1000": Platform.SG_1000_SC_3000,
+        "snes": Platform.SUPER_NINTENDO,
+        "turbografx-16": Platform.TURBOGRAFX_16,
+        "turbografx-cd": Platform.TURBOGRAFX_CD,
+        "virtual boy": Platform.VIRTUAL_BOY,
+        "nintendo wii": Platform.WII,
+        "wiiware": Platform.WII,
+        "nintendo wii u": Platform.WII_U,
+        "wonderswan": Platform.WONDERSWAN,
+        "wonderswan color": Platform.WONDERSWAN,
+        "sharp x68000": Platform.X68000,
+        "xbox": Platform.XBOX,
+        "xbox 360": Platform.XBOX_360,
     }
 
     def __init__(self):
@@ -140,71 +145,82 @@ class RomHackingClient:
     @staticmethod
     def create() -> RomHackingClient:
         return RomHackingClient()
-    
+
     async def _make_request(self, route: str, params: Dict) -> str:
-        url = f'{self.__BASE_ROM_HACKING_URL}/{route}?{urllib.parse.urlencode(params)}'
+        url = f"{self.__BASE_ROM_HACKING_URL}/{route}?{urllib.parse.urlencode(params)}"
 
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as res:
                 return await res.text()
-            
+
     async def translations(
-            self,
-            title: str,
-            platform: Platform,
-            category: Category = None,
-            results_per_page: Literal[10, 20, 30, 50, 100, 200] = 200,
-            language: Language = Language.ENGLISH,
-            sort_by: Literal['', 'Title', 'Date', 'Downloads', 'Added'] = '',
-            order_by: OrderBy = OrderBy.DESCENDING) -> str:
+        self,
+        title: str,
+        platform: Platform,
+        category: Category = None,
+        results_per_page: Literal[10, 20, 30, 50, 100, 200] = 200,
+        language: Language = Language.ENGLISH,
+        sort_by: Literal["", "Title", "Date", "Downloads", "Added"] = "",
+        order_by: OrderBy = OrderBy.DESCENDING,
+    ) -> str:
         params = {
-            'page': 'translations',
-            'title': title,
-            'platform': platform.value,
-            'perpage': results_per_page,
-            'status': category.value if category is not None else '',
-            'languageid': language.value,
-            'order': sort_by,
-            'dir': order_by.value,
-            'transsearch': 'Go'
+            "page": "translations",
+            "title": title,
+            "platform": platform.value,
+            "perpage": results_per_page,
+            "status": category.value if category is not None else "",
+            "languageid": language.value,
+            "order": sort_by,
+            "dir": order_by.value,
+            "transsearch": "Go",
         }
 
-        return await self._make_request('', params)
-    
-    async def match_game(self, game: ExcelGame):
-        if game.release_region in (ExcelRegion.NORTH_AMERICA, ExcelRegion.EUROPE) or \
-            not game.platform.lower() in self.__PLATFORM_ID_MAPPINGS:
-            return []
-        
-        text = await self.translations(game.title, self.__PLATFORM_ID_MAPPINGS[game.platform.lower()])
+        return await self._make_request("", params)
 
-        soup = BeautifulSoup(text, 'html.parser')
-        results = soup.find_all('tr', {'class': 'even', 'class': 'odd'})
+    async def match_game(self, game: ExcelGame):
+        if (
+            game.release_region in (ExcelRegion.NORTH_AMERICA, ExcelRegion.EUROPE)
+            or not game.platform.lower() in self.__PLATFORM_ID_MAPPINGS
+        ):
+            return []
+
+        text = await self.translations(
+            game.title, self.__PLATFORM_ID_MAPPINGS[game.platform.lower()]
+        )
+
+        soup = BeautifulSoup(text, "html.parser")
+        results = soup.find_all("tr", {"class": "even", "class": "odd"})
         matches = []
         validator = MatchValidator()
 
         for r in results:
-            title = r.find('td', {'class': 'col_1'})
+            title = r.find("td", {"class": "col_1"})
             name = title.a.text.strip()
-            url = title.a['href']
-            released_by = r.find('td', {'class': 'col_2'})
+            url = title.a["href"]
+            released_by = r.find("td", {"class": "col_2"})
             released_by_name = released_by.a.text.strip()
-            released_by_url = released_by.a['href']
-            genre = r.find('td', {'class': 'col_3'}).text.strip()
-            category = Category[r.find('td', {'class': 'col_5'}).text.strip().replace(' ', '_').upper()]
-            version = r.find('td', {'class': 'col_6'}).text.strip()
-            translation_release = datetime.strptime(r.find('td', {'class': 'col_7'}).text.strip(), '%d %b %Y')
+            released_by_url = released_by.a["href"]
+            genre = r.find("td", {"class": "col_3"}).text.strip()
+            category = Category[
+                r.find("td", {"class": "col_5"}).text.strip().replace(" ", "_").upper()
+            ]
+            version = r.find("td", {"class": "col_6"}).text.strip()
+            translation_release = datetime.strptime(
+                r.find("td", {"class": "col_7"}).text.strip(), "%d %b %Y"
+            )
 
             if validator.titles_equal_fuzzy(name, game.title):
-                matches.append({
-                    'name': name,
-                    'url': f'{self.__BASE_ROM_HACKING_URL}{url}',
-                    'released_by_name': released_by_name,
-                    'released_by_url': f'{self.__BASE_ROM_HACKING_URL}{released_by_url}',
-                    'genre': genre,
-                    'category': category,
-                    'version': version,
-                    'translation_release': translation_release
-                })
+                matches.append(
+                    {
+                        "name": name,
+                        "url": f"{self.__BASE_ROM_HACKING_URL}{url}",
+                        "released_by_name": released_by_name,
+                        "released_by_url": f"{self.__BASE_ROM_HACKING_URL}{released_by_url}",
+                        "genre": genre,
+                        "category": category,
+                        "version": version,
+                        "translation_release": translation_release,
+                    }
+                )
 
         return matches
