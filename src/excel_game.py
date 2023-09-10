@@ -22,6 +22,7 @@ class ExcelGame:
     franchise: str
     genre: str
     notes: str
+    owned_format: str
 
     def __init__(
         self,
@@ -34,6 +35,7 @@ class ExcelGame:
         franchise: str,
         genre: str,
         notes: str,
+        owned_format: str,
     ):
         self.title = title
         self.platform = platform
@@ -44,3 +46,4 @@ class ExcelGame:
         self.franchise = franchise
         self.genre = genre
         self.notes = notes
+        self.owned_format = owned_format

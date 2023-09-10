@@ -7,7 +7,7 @@ class Config:
     igdb_client_id: str
     igdb_client_secret: str
     steam_web_api_key: str
-    itchio_api_key: str
+    price_charting_api_key: str
     user_agent: str
 
     def __init__(
@@ -17,7 +17,7 @@ class Config:
         igdb_client_id: str,
         igdb_client_secret: str,
         steam_web_api_key: str,
-        itchio_api_key: str,
+        price_charting_api_key: str,
         version: str,
     ):
         self.moby_games_api_key = moby_games_api_key
@@ -25,7 +25,7 @@ class Config:
         self.igdb_client_id = igdb_client_id
         self.igdb_client_secret = igdb_client_secret
         self.steam_web_api_key = steam_web_api_key
-        self.itchio_api_key = itchio_api_key
+        self.price_charting_api_key = price_charting_api_key
         self.user_agent = f"GamesMaster/{version}"
 
     @staticmethod
@@ -41,6 +41,6 @@ class Config:
                 config["igdbClientId"],
                 config["igdbClientSecret"],
                 config["steamWebApiKey"],
-                config["itchioApiKey"],
+                config["priceChartingApiKey"],
                 version,
             )

@@ -30,7 +30,6 @@ class MetacriticGame:
 class MetacriticClient:
     __BASE_METACRITIC_URL = "https://www.metacritic.com"
     __METACRITIC_HEADERS = {
-        "Content-Type": "application/x-www-form-urlencoded",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
     }
 
@@ -59,6 +58,21 @@ class MetacriticClient:
         text = await self._search(game.title)
         soup = BeautifulSoup(text, "html.parser")
         results = soup.find_all("div", {"class": "main_stats"})
+
+        page = 0
+        next_page = soup.find("span", {"class": "flipper next"})
+
+        while next_page is not None and next_page.a is not None:
+            page += 1
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"{self.__BASE_METACRITIC_URL}{next_page.a['href']}",
+                    headers=self.__METACRITIC_HEADERS,
+                ) as res:
+                    soup = BeautifulSoup(await res.text(), "html.parser")
+                    results.extend(soup.find_all("div", {"class": "main_stats"}))
+                    next_page = soup.find("span", {"class": "flipper next"})
+
         matches = []
         validator = MatchValidator()
 

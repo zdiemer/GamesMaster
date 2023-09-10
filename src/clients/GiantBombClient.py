@@ -1,52 +1,35 @@
 from __future__ import annotations
 
-import aiohttp
-import urllib.parse
 from datetime import datetime
-from enum import Enum
-from typing import Dict, List
+from typing import Any, Dict, List, Tuple
 
+from clients.ClientBase import ClientBase
 from config import Config
 from excel_game import ExcelGame
-from match_validator import MatchValidator
+from match_validator import MatchValidator, ValidationInfo
 
 
-class GiantBombFormat(Enum):
-    JSON = "json"
-    XML = "xml"
-
-
-class GiantBombClient:
+class GiantBombClient(ClientBase):
     __BASE_GIANTBOMB_URL = "https://www.giantbomb.com/api"
-    __headers = {}
 
     __api_key: str
 
-    def __init__(self, api_key: str, user_agent: str):
-        self.__api_key = api_key
-        self.__headers = {"User-Agent": user_agent}
-
-    @staticmethod
-    async def create(config: Config = None) -> GiantBombClient:
-        if config is None:
-            config = Config.create()
-
-        return GiantBombClient(config.giant_bomb_api_key, config.user_agent)
+    def __init__(self, config: Config = None):
+        config = config or Config.create()
+        super().__init__(config)
+        self.__api_key = self._config.giant_bomb_api_key
 
     async def _make_request(
         self,
         route: str = "",
-        params: Dict = {},
-        format: GiantBombFormat = GiantBombFormat.JSON,
+        params: Dict[str, Any] = {},
         api_detail_url: str = None,
-    ):
+    ) -> Any:
         if params.get("api_key") is None:
             params["api_key"] = self.__api_key
 
         if params.get("format") is None:
-            params["format"] = format.value
-
-        encoded_params = urllib.parse.urlencode(params)
+            params["format"] = "json"
 
         base_url = (
             api_detail_url
@@ -54,21 +37,17 @@ class GiantBombClient:
             else f"{self.__BASE_GIANTBOMB_URL}/{route}"
         )
 
-        url = f"{base_url}?{encoded_params}"
+        return await self.get(base_url, params=params)
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=self.__headers) as res:
-                return await res.json()
-
-    async def game(self, guid: str):
+    async def game(self, guid: str) -> Any:
         return await self._make_request(f"game/{guid}")
 
-    async def release(self, guid: str):
+    async def release(self, guid: str) -> Any:
         return await self._make_request(f"release/{guid}")
 
-    async def search(self, query: str, format: GiantBombFormat = GiantBombFormat.JSON):
+    async def search(self, query: str) -> Any:
         return await self._make_request(
-            "search/", params={"query": query, "resources": "game"}, format=format
+            "search/", params={"query": query, "resources": "game"}
         )
 
     async def get_release_years(self, guid: str) -> List[int]:
@@ -100,9 +79,9 @@ class GiantBombClient:
 
         return years
 
-    async def match_game(self, game: ExcelGame):
+    async def match_game(self, game: ExcelGame) -> List[Tuple[Any, ValidationInfo]]:
         results = await self.search(game.title)
-        matches = []
+        matches: List[Tuple[Any, ValidationInfo]] = []
         validator = MatchValidator()
 
         async def get_years(guid: str):

@@ -1,6 +1,6 @@
 import asyncio
 from enum import Enum
-from typing import Any, Callable, List, Tuple
+from typing import Any, Callable, Dict, List, Tuple
 
 import pandas as pd
 from howlongtobeatpy import HowLongToBeat, HowLongToBeatEntry
@@ -9,10 +9,12 @@ from steam import Steam
 from config import Config
 from excel_game import ExcelGame, ExcelRegion as Region
 from match_validator import MatchValidator, ValidationInfo
+from clients.ClientBase import ClientBase
 from clients.GiantBombClient import GiantBombClient
 from clients.IgdbClient import IgdbClient
 from clients.MetacriticClient import MetacriticClient, MetacriticGame
 from clients.MobyGamesClient import MobyGamesClient
+from clients.PriceChartingClient import PriceChartingClient
 from clients.RomHackingClient import RomHackingClient
 
 
@@ -25,7 +27,7 @@ class DataSource(Enum):
     ROM_HACKING = 6
     STEAM = 7
     HLTB = 8
-    # TODO: Add PriceCharting
+    PRICE_CHARTING = 9
     # TODO: Add ArcadeDb
     # TODO: Add Itch.io
     # TODO: Add Epic
@@ -40,6 +42,7 @@ class GameMatch:
     hltb_id: int
     metacritic_info: MetacriticGame
     romhacking_info: any
+    pc_id: int
 
     def __init__(
         self,
@@ -50,6 +53,7 @@ class GameMatch:
         hltb_id: int = None,
         metacritic_info: MetacriticGame = None,
         romhacking_info=None,
+        pc_id: int = None,
     ):
         self.igdb_id = igdb_id
         self.giantbomb_id = giantbomb_id
@@ -58,6 +62,7 @@ class GameMatch:
         self.hltb_id = hltb_id
         self.metacritic_info = metacritic_info
         self.romhacking_info = romhacking_info
+        self.pc_id = pc_id
 
     @property
     def match_count(self):
@@ -70,7 +75,28 @@ class GameMatch:
                 self.hltb_id is not None,
                 self.metacritic_info is not None,
                 self.romhacking_info is not None,
+                self.pc_id is not None,
             ]
+        )
+
+    @property
+    def matching_sources(self):
+        return list(
+            filter(
+                lambda x: x is not None,
+                [
+                    DataSource.IGDB if self.igdb_id is not None else None,
+                    DataSource.GIANT_BOMB if self.giantbomb_id is not None else None,
+                    DataSource.MOBY_GAMES if self.mobygames_id is not None else None,
+                    DataSource.STEAM if self.steam_app_id is not None else None,
+                    DataSource.HLTB if self.hltb_id is not None else None,
+                    DataSource.METACRITIC if self.metacritic_info is not None else None,
+                    DataSource.ROM_HACKING
+                    if self.romhacking_info is not None
+                    else None,
+                    DataSource.PRICE_CHARTING if self.pc_id is not None else None,
+                ],
+            )
         )
 
 
@@ -124,14 +150,15 @@ def get_match_id_from_matches(
 async def search_game_mappings(games: pd.DataFrame, sources: List[DataSource] = []):
     config = Config.create()
 
-    all_clients = {
-        DataSource.GIANT_BOMB: await GiantBombClient.create(config),
+    all_clients: Dict[DataSource, ClientBase] = {
+        DataSource.GIANT_BOMB: GiantBombClient(config),
         DataSource.IGDB: await IgdbClient.create(config),
         DataSource.METACRITIC: MetacriticClient.create(),
         DataSource.MOBY_GAMES: await MobyGamesClient.create(config),
         DataSource.ROM_HACKING: RomHackingClient.create(),
         DataSource.STEAM: None,
         DataSource.HLTB: None,
+        DataSource.PRICE_CHARTING: PriceChartingClient(config),
     }
 
     enabled_clients = {}
@@ -145,6 +172,7 @@ async def search_game_mappings(games: pd.DataFrame, sources: List[DataSource] = 
     matches: List[GameMatch] = []
 
     for _, row in games.sample(10).iterrows():
+        expected_sources = len(enabled_clients)
         match: GameMatch = GameMatch()
         game = ExcelGame(
             row["Title"],
@@ -156,6 +184,7 @@ async def search_game_mappings(games: pd.DataFrame, sources: List[DataSource] = 
             row["Franchise"],
             row["Genre"],
             row["Notes"],
+            row["Format"],
         )
         print(
             f'Processing {game.title} ({game.platform}) [{game.release_date.year if game.release_date is not None else "Early Access"}]...'
@@ -192,6 +221,9 @@ async def search_game_mappings(games: pd.DataFrame, sources: List[DataSource] = 
             )
 
         if DataSource.STEAM in enabled_clients:
+            if game.platform != "PC":
+                expected_sources -= 1
+
             steam_matches = search_steam(game, config.steam_web_api_key)
 
             if len(steam_matches) > 1:
@@ -216,16 +248,22 @@ async def search_game_mappings(games: pd.DataFrame, sources: List[DataSource] = 
             )
 
         if DataSource.METACRITIC in enabled_clients:
-            meta_matches = await enabled_clients[DataSource.METACRITIC].match_game(game)
+            if game.release_region != Region.NORTH_AMERICA:
+                expected_sources -= 1
+
+            pc_matches = await enabled_clients[DataSource.METACRITIC].match_game(game)
             match.metacritic_info = get_match_id_from_matches(
                 game,
-                meta_matches,
+                pc_matches,
                 lambda m: m,
                 "Metacritic",
                 lambda m: f"{m.title} ({m.url})",
             )
 
         if DataSource.ROM_HACKING in enabled_clients:
+            if game.release_region in (Region.NORTH_AMERICA, Region.EUROPE):
+                expected_sources -= 1
+
             rh_matches = await enabled_clients[DataSource.ROM_HACKING].match_game(game)
 
             if len(rh_matches) > 1:
@@ -237,14 +275,33 @@ async def search_game_mappings(games: pd.DataFrame, sources: List[DataSource] = 
                 )
                 match.romhacking_info = rh_matches[selection]
             elif len(rh_matches) == 1:
-                print(rh_matches[0])
                 match.romhacking_info = rh_matches[0]
 
+        if DataSource.PRICE_CHARTING in enabled_clients:
+            if game.owned_format not in ("Both", "Physical"):
+                expected_sources -= 1
+
+            pc_matches = await enabled_clients[DataSource.PRICE_CHARTING].match_game(
+                game
+            )
+            match.pc_id = get_match_id_from_matches(
+                game,
+                pc_matches,
+                lambda m: m["id"],
+                "Price Charting",
+                lambda m: f"{m['product-name']}",
+            )
+
         print(
-            f"{game.title} matched {match.match_count} out of {len(enabled_clients)} sources"
+            f"{game.title} matched {match.match_count} out of "
+            f"{expected_sources} sources: "
+            f"{', '.join([str(s.name) for s in match.matching_sources])}"
         )
 
-        matches.append(match)
+        if match.match_count > 0:
+            matches.append(match)
+        else:
+            print(f"{game.title} had no matches!")
 
     return matches
 

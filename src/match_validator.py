@@ -16,6 +16,7 @@ class ValidationInfo(NamedTuple):
 
 class MatchValidator:
     __cached_normalization: Dict[str, str]
+    __THE_REGEX = r"The "
 
     def __init__(self):
         self.__cached_normalization = {}
@@ -26,13 +27,22 @@ class MatchValidator:
         return self.normalize(t1) == self.normalize(t2)
 
     def titles_equal_fuzzy(self, t1: str, t2: str) -> bool:
+        t1_fuzzy = re.sub(self.__THE_REGEX, "", t1.split(":")[0])
+        t2_fuzzy = re.sub(self.__THE_REGEX, "", t2.split(":")[0])
+
         return (
-            self.titles_equal_normalized(t1.split(":")[0], t2.split(":")[0])
+            self.titles_equal_normalized(t1_fuzzy, t2_fuzzy)
             or edit_distance.SequenceMatcher(
                 a=self.normalize(t1), b=self.normalize(t2)
             ).distance()
             <= 2
+            or self.pokemon_special_case(t1, t2)
         )
+
+    def pokemon_special_case(self, t1: str, t2: str) -> bool:
+        if t1.startswith("Pokémon") and not t1.endswith("version"):
+            return self.titles_equal_normalized(f"{t1}version", t2)
+        return False
 
     @staticmethod
     def romanize(s: str) -> str:
@@ -49,7 +59,11 @@ class MatchValidator:
                     re.sub(
                         r"( \([0-9]{4}\))",
                         "",
-                        html.unescape(MatchValidator.romanize(s))
+                        html.unescape(
+                            MatchValidator.romanize(
+                                s.replace("™", "").replace("®", "").replace("©", "")
+                            )
+                        )
                         .casefold()
                         .replace("&", "and"),
                     ),
