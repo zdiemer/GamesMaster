@@ -8,3 +8,7 @@ static/config.json
 app/.env
 # No need to commit twice, the games.csv is good enough to generate it.
 app/db/03_parsed_data.sql
+
+# django
+game_manager/data/*
+game_manager/db.*
