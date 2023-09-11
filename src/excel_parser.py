@@ -108,15 +108,18 @@ def get_match_option_selection(
     source: str, game: ExcelGame, options: List, renderer: Callable[[Any], str]
 ) -> int:
     print(f"\nMultiple matches on {source} detected:\n")
+    max_i = 0
     for i, option in enumerate(options):
         print(f"{i+1}. {renderer(option)}")
+        max_i = i + 1
+    print(f"{max_i+1}. None of the above")
     release = (
         game.release_date.year if game.release_date is not None else "Early Access"
     )
     val = input(
         f"Pick which option best matches {game.title} ({game.platform}) [{release}]: "
     )
-    while not str.isdigit(val) or int(val) < 1 or int(val) > len(options):
+    while not str.isdigit(val) or int(val) < 1 or int(val) > len(options) + 1:
         val = input("Invalid selection, please select from the above list: ")
     return int(val) - 1
 
@@ -142,6 +145,10 @@ def get_match_id_from_matches(
             [m[0] for m in match_options],
             option_renderer,
         )
+
+        if selection > len(match_options):
+            return None
+
         return id_getter(match_options[selection][0])
     elif len(matches) == 1:
         return id_getter(matches[0][0])
@@ -152,10 +159,10 @@ async def search_game_mappings(games: pd.DataFrame, sources: List[DataSource] = 
 
     all_clients: Dict[DataSource, ClientBase] = {
         DataSource.GIANT_BOMB: GiantBombClient(config),
-        DataSource.IGDB: await IgdbClient.create(config),
-        DataSource.METACRITIC: MetacriticClient.create(),
-        DataSource.MOBY_GAMES: await MobyGamesClient.create(config),
-        DataSource.ROM_HACKING: RomHackingClient.create(),
+        DataSource.IGDB: IgdbClient(config),
+        DataSource.METACRITIC: MetacriticClient(config),
+        DataSource.MOBY_GAMES: MobyGamesClient(config),
+        DataSource.ROM_HACKING: RomHackingClient(config),
         DataSource.STEAM: None,
         DataSource.HLTB: None,
         DataSource.PRICE_CHARTING: PriceChartingClient(config),

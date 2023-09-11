@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-import aiohttp
 import asyncio
 import html
-import urllib.parse
 from datetime import datetime, timedelta
-from typing import Dict, List, Literal, NamedTuple
+from typing import Any, Dict, List, Literal, NamedTuple, Tuple
 
+from clients.ClientBase import ClientBase
 from config import Config
 from excel_game import ExcelGame
-from match_validator import MatchValidator
+from match_validator import MatchValidator, ValidationInfo
 
 
 class GenreCategory:
@@ -19,6 +18,12 @@ class GenreCategory:
     def __init__(self, name: str, id: int):
         self.name = name
         self.id = id
+
+    def __str__(self) -> str:
+        return str({"name": self.name, "id": self.id})
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
 
 class Genre:
@@ -35,6 +40,19 @@ class Genre:
         self.name = name
         self.description = description
 
+    def __str__(self) -> str:
+        return str(
+            {
+                "category": self.category,
+                "id": self.id,
+                "description": self.description,
+                "name": self.name,
+            }
+        )
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
 
 class Group:
     description: str
@@ -46,6 +64,12 @@ class Group:
         self.id = id
         self.name = name
 
+    def __str__(self) -> str:
+        return str({"description": self.description, "id": self.id, "name": self.name})
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
 
 class Platform:
     id: int
@@ -54,6 +78,12 @@ class Platform:
     def __init__(self, id: int, name: str):
         self.id = id
         self.name = name
+
+    def __str__(self) -> str:
+        return str({"id": self.id, "name": self.name})
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
 
 class AlternateTitle:
@@ -64,10 +94,24 @@ class AlternateTitle:
         self.description = description
         self.title = title
 
+    def __str__(self) -> str:
+        return str({"description": self.description, "title": self.title})
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
 
 class GamePlatform(NamedTuple):
     platform: Platform
     first_release_date: str
+
+    def __str__(self) -> str:
+        return str(
+            {"platform": self.platform, "first_release_date": self.first_release_date}
+        )
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
 
 class Cover:
@@ -91,6 +135,20 @@ class Cover:
         self.thumbnail_image_url = thumbnail_image_url
         self.width = width
 
+    def __str__(self) -> str:
+        return str(
+            {
+                "height": self.height,
+                "image_url": self.image_url,
+                "platforms": self.platforms,
+                "thumbnail_image_url": self.thumbnail_image_url,
+                "width": self.width,
+            }
+        )
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
 
 class Screenshot:
     caption: str
@@ -112,6 +170,20 @@ class Screenshot:
         self.image_url = image_url
         self.thumbnail_image_url = thumbnail_image_url
         self.width = width
+
+    def __str__(self) -> str:
+        return str(
+            {
+                "caption": self.caption,
+                "height": self.height,
+                "image_url": self.image_url,
+                "thumbnail_image_url": self.thumbnail_image_url,
+                "width": self.width,
+            }
+        )
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
 
 class Game:
@@ -156,15 +228,37 @@ class Game:
         self.sample_screenshots = sample_screenshots
         self.title = title
 
+    def __str__(self) -> str:
+        return str(
+            {
+                "alternate_titles": self.alternate_titles,
+                "description": self.description,
+                "id": self.id,
+                "genres": self.genres,
+                "moby_score": self.moby_score,
+                "moby_url": self.moby_url,
+                "official_url": self.official_url,
+                "platforms": self.platforms,
+                "sample_cover": self.sample_cover,
+                "sample_screenshots": self.sample_screenshots,
+                "title": self.title,
+            }
+        )
 
-class MobyGamesClient:
+    def __repr__(self) -> str:
+        return self.__str__()
+
+
+class MobyGamesClient(ClientBase):
     __BASE_MOBYGAMES_SEARCH_URL = "https://api.mobygames.com/v1"
 
     __api_key: str
     __next_call: datetime
 
-    def __init__(self, api_key: str):
-        self.__api_key = api_key
+    def __init__(self, config: Config = None):
+        config = config or Config.create()
+        super().__init__(config)
+        self.__api_key = self._config.moby_games_api_key
         self.__next_call = datetime.utcnow()
 
     @staticmethod
@@ -178,7 +272,6 @@ class MobyGamesClient:
         if self.__next_call > datetime.utcnow():
             delta = self.__next_call - datetime.utcnow()
             sleep_time_seconds = delta.seconds + (delta.microseconds / 1_000_000.0)
-            print(f"Sleeping {sleep_time_seconds:,.2f}s for MobyGames")
             await asyncio.sleep(sleep_time_seconds)
 
         self.__next_call = datetime.utcnow() + timedelta(seconds=10)
@@ -186,12 +279,9 @@ class MobyGamesClient:
         if params.get("api_key") is None:
             params["api_key"] = self.__api_key
 
-        encoded_params = urllib.parse.urlencode(params, doseq=True)
-        url = f"{self.__BASE_MOBYGAMES_SEARCH_URL}/{route}?{encoded_params}"
+        url = f"{self.__BASE_MOBYGAMES_SEARCH_URL}/{route}"
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as res:
-                return await res.json()
+        return await self.get(url, params=params)
 
     async def genres(self) -> List[Genre]:
         res = await self._make_request("genres")
@@ -308,12 +398,11 @@ class MobyGamesClient:
                 for game in res["games"]
             ]
         except KeyError:
-            print(res)
             raise
 
-    async def match_game(self, game: ExcelGame):
+    async def match_game(self, game: ExcelGame) -> List[Tuple[Any, ValidationInfo]]:
         results = await self.games(title=game.title)
-        matches = []
+        matches: List[Tuple[Any, ValidationInfo]] = []
         validator = MatchValidator()
 
         async def get_years(game_id: int, platform_id: int):
@@ -357,5 +446,7 @@ class MobyGamesClient:
                         game.release_date.year, await get_years(g.id, pid)
                     ):
                         matches.append((g, match))
+        if not any(matches):
+            print(results)
 
         return matches

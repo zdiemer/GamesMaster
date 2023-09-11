@@ -84,7 +84,7 @@ PLATFORM_NAMES = {
     "nintendo switch": ["switch", "ns"],
     "nintendo wii": ["wii", "wii shop"],
     "nintendo wii u": ["wii u", "wiiu", "wii u eshop", "nintendo wii u eshop"],
-    "oculus quest": ["oq"],
+    "oculus quest": ["oq", "oculus fr"],
     "ouya": [],
     "pc": [
         "windows pc",
@@ -151,7 +151,7 @@ PLATFORM_NAMES = {
     "vectrex": [],
     "virtual boy": ["vb"],
     "watara supervision": ["supervision", "watara/quickshot supervision"],
-    "wiiware": ["wii", "nintendo wii", "wii shop"],
+    "wiiware": ["wii", "nintendo wii", "wii shop", "virtual console"],
     "wonderswan": ["ws", "bandai wonderswan"],
     "wonderswan color": ["wsc", "bandai wonderswan color"],
     "xbox": ["xb", "microsoft xbox"],

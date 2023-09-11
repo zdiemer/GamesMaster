@@ -5,12 +5,12 @@ import re
 import urllib.parse
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List
+from typing import Any, Dict, List, Tuple
 
 from bs4 import BeautifulSoup
 
 from excel_game import ExcelGame
-from match_validator import MatchValidator
+from match_validator import MatchValidator, ValidationInfo
 
 
 class GameFaqsPlatform:
@@ -346,9 +346,9 @@ class GameFaqsClient:
 
         return gf_game
 
-    async def match_game(self, game: ExcelGame):
+    async def match_game(self, game: ExcelGame) -> List[Tuple[Any, ValidationInfo]]:
         results = await self.home_game_search(game.title)
-        matches = []
+        matches: List[Tuple[Any, ValidationInfo]] = []
         validator = MatchValidator()
 
         for r in results:

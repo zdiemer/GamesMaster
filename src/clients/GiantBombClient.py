@@ -65,6 +65,11 @@ class GiantBombClient(ClientBase):
         ):
             years.append(game["expected_release_year"])
 
+        if game.get("original_release_date") is not None:
+            years.append(
+                datetime.strptime(game["original_release_date"], "%Y-%m-%d").year
+            )
+
         for rel in game.get("releases") or []:
             release = (await self._make_request(api_detail_url=rel["api_detail_url"]))[
                 "results"
