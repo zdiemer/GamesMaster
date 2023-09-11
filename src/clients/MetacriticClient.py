@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import aiohttp
 import re
-from typing import List, Literal
+from typing import Any, List, Tuple
 
 from bs4 import BeautifulSoup
 
+from clients.ClientBase import ClientBase
+from config import Config
 from excel_game import ExcelGame, ExcelRegion as Region
-from match_validator import MatchValidator
+from match_validator import MatchValidator, ValidationInfo
 
 
 class MetacriticGame:
@@ -27,31 +28,29 @@ class MetacriticGame:
         self.release_year = release_year
 
 
-class MetacriticClient:
+class MetacriticClient(ClientBase):
     __BASE_METACRITIC_URL = "https://www.metacritic.com"
     __METACRITIC_HEADERS = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
     }
 
-    def __init__(self):
-        pass
-
-    @staticmethod
-    def create() -> MetacriticClient:
-        return MetacriticClient()
+    def __init__(self, config: Config = None):
+        config = config or Config.create()
+        super().__init__(config)
 
     async def _search(self, term: str):
         payload = {"search_term": term, "search_filter": "game"}
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{self.__BASE_METACRITIC_URL}/search",
-                headers=self.__METACRITIC_HEADERS,
-                data=payload,
-            ) as res:
-                return await res.text()
+        return await self.post(
+            f"{self.__BASE_METACRITIC_URL}/search",
+            headers=self.__METACRITIC_HEADERS,
+            data=payload,
+            json=False,
+        )
 
-    async def match_game(self, game: ExcelGame) -> List[MetacriticGame]:
+    async def match_game(
+        self, game: ExcelGame
+    ) -> List[Tuple[MetacriticGame, ValidationInfo]]:
         if game.release_region != Region.NORTH_AMERICA:
             return []
 
@@ -64,16 +63,16 @@ class MetacriticClient:
 
         while next_page is not None and next_page.a is not None:
             page += 1
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{self.__BASE_METACRITIC_URL}{next_page.a['href']}",
-                    headers=self.__METACRITIC_HEADERS,
-                ) as res:
-                    soup = BeautifulSoup(await res.text(), "html.parser")
-                    results.extend(soup.find_all("div", {"class": "main_stats"}))
-                    next_page = soup.find("span", {"class": "flipper next"})
+            res = await self.get(
+                f"{self.__BASE_METACRITIC_URL}{next_page.a['href']}",
+                headers=self.__METACRITIC_HEADERS,
+                json=False,
+            )
+            soup = BeautifulSoup(res, "html.parser")
+            results.extend(soup.find_all("div", {"class": "main_stats"}))
+            next_page = soup.find("span", {"class": "flipper next"})
 
-        matches = []
+        matches: List[Tuple[MetacriticGame, ValidationInfo]] = []
         validator = MatchValidator()
 
         for r in results:

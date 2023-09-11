@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-import aiohttp
 import asyncio
 import unicodedata
-import urllib.parse
 from datetime import datetime, timedelta
-from typing import Dict, List
+from typing import Any, Dict, List, Tuple
 
+from clients.ClientBase import ClientBase
 from config import Config
 from excel_game import ExcelGame
-from match_validator import MatchValidator
+from match_validator import MatchValidator, ValidationInfo
 
 
-class IgdbClient:
+class IgdbClient(ClientBase):
     __BASE_TWITCH_AUTH_URL = "https://id.twitch.tv/oauth2/token?"
     __BASE_IGDB_URL = "https://api.igdb.com/v4"
+    __MAX_REQUESTS_PER_SECOND = 4
 
     __access_token: str
     __auth_expiration: datetime
@@ -23,42 +23,32 @@ class IgdbClient:
     __platforms: List[Dict]
     __requests_per_second: Dict[int, int]
 
-    def __init__(self, client_id: str, client_secret: str):
-        self.__client_id = client_id
-        self.__client_secret = client_secret
+    def __init__(self, config: Config = None):
+        config = config or Config.create()
+        super().__init__(config)
+        self.__client_id = config.igdb_client_id
+        self.__client_secret = config.igdb_client_secret
         self.__requests_per_second = {}
-
-    @staticmethod
-    async def create(config: Config = None) -> IgdbClient:
-        if config is None:
-            config = Config.create()
-
-        client = IgdbClient(config.igdb_client_id, config.igdb_client_secret)
-        await client._authorize()
-        await client._init_platforms()
-        return client
+        self.__platforms = {}
+        self.__auth_expiration = datetime.utcnow() - timedelta(seconds=30)
 
     async def _authorize(self):
-        url = self.__BASE_TWITCH_AUTH_URL + urllib.parse.urlencode(
-            {
+        res = await self.post(
+            self.__BASE_TWITCH_AUTH_URL,
+            params={
                 "client_id": self.__client_id,
                 "client_secret": self.__client_secret,
                 "grant_type": "client_credentials",
-            }
+            },
         )
-
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url) as res:
-                res_json = await res.json()
-                self.__access_token = res_json["access_token"]
-                self.__auth_expiration = datetime.utcnow() + timedelta(
-                    seconds=res_json["expires_in"]
-                )
+        self.__access_token = res["access_token"]
+        self.__auth_expiration = datetime.utcnow() + timedelta(
+            seconds=res["expires_in"]
+        )
 
     async def _make_request(self, route: str, data: str):
         cur_sec = datetime.utcnow().second
-        if self.__requests_per_second.get(cur_sec) == 4:
-            print("Sleeping 1s for IGDB")
+        if self.__requests_per_second.get(cur_sec) == self.__MAX_REQUESTS_PER_SECOND:
             await asyncio.sleep(1)
             self.__requests_per_second.clear()
         elif self.__requests_per_second.get(cur_sec) == 0:
@@ -68,15 +58,11 @@ class IgdbClient:
         ) + 1
 
         if datetime.utcnow() > self.__auth_expiration:
-            self._authorize()
+            await self._authorize()
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{self.__BASE_IGDB_URL}/{route}",
-                headers=self._get_headers(),
-                data=data,
-            ) as res:
-                return await res.json()
+        return await self.post(
+            f"{self.__BASE_IGDB_URL}/{route}", headers=self._get_headers(), data=data
+        )
 
     def _get_headers(self):
         if self.__access_token is None:
@@ -88,9 +74,8 @@ class IgdbClient:
 
     async def _init_platforms(self):
         platforms = await self.platforms("fields name; limit 500;")
-        self.__platforms = {}
         for p in platforms:
-            self.__platforms[p["id"]] = p["name"]
+            self.__platforms[int(p["id"])] = p["name"]
 
     async def alternative_names(self, data: str):
         return await self._make_request("alternative_names/", data)
@@ -104,14 +89,17 @@ class IgdbClient:
     async def release_dates(self, data: str):
         return await self._make_request("release_dates/", data)
 
-    async def match_game(self, game: ExcelGame):
+    async def match_game(self, game: ExcelGame) -> List[Tuple[Any, ValidationInfo]]:
+        if not any(self.__platforms):
+            await self._init_platforms()
+
         processed_title = unicodedata.normalize("NFKD", game.title).replace('"', '\\"')
         search_data = f'search "{processed_title}"; fields alternative_names,id,name,platforms,genres,parent_game,url,release_dates;'.encode(
             "utf-8"
         )
 
         results = await self.games(search_data)
-        matches = []
+        matches: List[Tuple[Any, ValidationInfo]] = []
         validator = MatchValidator()
 
         for r in results:

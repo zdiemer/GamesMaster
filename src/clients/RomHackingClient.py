@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import aiohttp
-import urllib.parse
 from datetime import datetime
 from enum import Enum
-from typing import Dict, Literal
+from typing import Any, Dict, List, Literal, Tuple
 
 from bs4 import BeautifulSoup
 
+from clients.ClientBase import ClientBase
+from config import Config
 from excel_game import ExcelGame, ExcelRegion
-from match_validator import MatchValidator
+from match_validator import MatchValidator, ValidationInfo
 
 
 class Category(Enum):
@@ -82,7 +82,7 @@ class OrderBy(Enum):
     DESCENDING = 1
 
 
-class RomHackingClient:
+class RomHackingClient(ClientBase):
     __BASE_ROM_HACKING_URL = "https://www.romhacking.net"
 
     __PLATFORM_ID_MAPPINGS = {
@@ -139,19 +139,14 @@ class RomHackingClient:
         "xbox 360": Platform.XBOX_360,
     }
 
-    def __init__(self):
-        pass
-
-    @staticmethod
-    def create() -> RomHackingClient:
-        return RomHackingClient()
+    def __init__(self, config: Config = None):
+        config = config or Config.create()
+        super().__init__(config)
 
     async def _make_request(self, route: str, params: Dict) -> str:
-        url = f"{self.__BASE_ROM_HACKING_URL}/{route}?{urllib.parse.urlencode(params)}"
-
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as res:
-                return await res.text()
+        return await self.get(
+            f"{self.__BASE_ROM_HACKING_URL}/{route}", params=params, json=False
+        )
 
     async def translations(
         self,
@@ -177,7 +172,7 @@ class RomHackingClient:
 
         return await self._make_request("", params)
 
-    async def match_game(self, game: ExcelGame):
+    async def match_game(self, game: ExcelGame) -> List[Tuple[Any, ValidationInfo]]:
         if (
             game.release_region in (ExcelRegion.NORTH_AMERICA, ExcelRegion.EUROPE)
             or not game.platform.lower() in self.__PLATFORM_ID_MAPPINGS
@@ -190,7 +185,7 @@ class RomHackingClient:
 
         soup = BeautifulSoup(text, "html.parser")
         results = soup.find_all("tr", {"class": "even", "class": "odd"})
-        matches = []
+        matches: List[Tuple[Any, ValidationInfo]] = []
         validator = MatchValidator()
 
         for r in results:
