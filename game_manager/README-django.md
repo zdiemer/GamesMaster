@@ -20,7 +20,7 @@ $ ls -l
 $ sudo chown -R $USER:$USER backend
 ```
 
-Applyting migrations.
+Applying migrations.
 
 ```sh
 $ sudo docker compose run web python manage.py migrate
@@ -36,4 +36,8 @@ Run scripts
 
 ```sh
 $ sudo docker compose run web python manage.py runscript test_data
+```
+
+```sh
+$ sudo docker compose run web python manage.py makemigrations
 ```
