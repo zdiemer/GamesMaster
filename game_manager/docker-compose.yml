@@ -2,7 +2,7 @@ services:
   db:
     image: postgres
     volumes:
-      - ./data/db:/var/lib/postgresql/data
+      - database_volume:/var/lib/postgresql/data
     environment:
       - POSTGRES_DB=postgres
       - POSTGRES_USER=postgres
@@ -20,3 +20,11 @@ services:
       - POSTGRES_PASSWORD=postgres
     depends_on:
       - db
+    healthcheck:
+      test: curl --fail http://localhost:8000/healthz || exit 1
+      interval: 10s
+      retries: 5
+      start_period: 5s
+      timeout: 10s
+volumes:
+  database_volume:

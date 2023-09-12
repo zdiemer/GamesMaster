@@ -3,6 +3,9 @@ from django.core import serializers
 
 from .models import Game, Release, Platform, Genre
 
+def healthcheck(request):
+    return HttpResponse("ok")
+
 def index(request):
     games_list = Game.objects.all()
     res = '<h1>Game Manager</h1>'
@@ -20,6 +23,7 @@ def index(request):
         releases = Release.objects.filter(game=game)
         for release in releases:
             platforms = release.platforms.all()
-            res += f'<div>&emsp;released on {release.release_date} for {" & ".join(plat.name for plat in platforms)} in {release.region.display_name}</div>'
+            publishers = release.publishers.all()
+            res += f'<div>&emsp;released on {release.release_date} for {" & ".join(plat.name for plat in platforms)} in {release.region.display_name} by {" & ".join(pub.name for pub in publishers)}</div>'
 
     return HttpResponse(res)
