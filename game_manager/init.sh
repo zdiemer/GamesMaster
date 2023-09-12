@@ -9,6 +9,9 @@ done;
 
 echo "stack started"
 
+echo "making migrations"
+docker compose exec web python manage.py makemigrations
+
 echo "applying migrations"
 docker compose exec web python manage.py migrate
 
