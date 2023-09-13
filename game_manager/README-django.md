@@ -2,13 +2,32 @@
 
 ## Docker compose commands
 
-Run the server yourself locally
+Via shell script:
+
+```sh
+$ sh init.sh
+```
+
+This should run the stack, and then apply all migrations and commit some test data.
+
+When you're done, pull the stack down:
+
+```sh
+$ docker compose down
+# to reset the db volume as well.
+$ docker compose down -v
+```
+
+
+or you can run the server yourself manually.
 
 ```sh
 $ docker compose build
 
 $ docker compose up
 ```
+
+### Individual commands
 
 Create an app
 
