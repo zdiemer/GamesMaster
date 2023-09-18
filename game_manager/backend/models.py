@@ -54,27 +54,14 @@ class Game(models.Model):
     directors = models.ManyToManyField(Person, related_name="%(class)s_directors")
     composers = models.ManyToManyField(Person, related_name="%(class)s_composers")
 
+    # Self many-to-many references.
+    # Setting this will imply that the games in this list are DLC, and that THIS game is the "parent" game.
+    dlc = models.ManyToManyField("self", symmetrical=False, related_name="%(class)s_dlc")
+    # Setting this will imply that this game is a "collection" of other games.
+    collectees = models.ManyToManyField("self", symmetrical=False, related_name="%(class)s_collectees")
+
     def __str__(self):
         return f"{self.title}"
-
-
-class GameDlc(models.Model):
-    baseGame = models.ForeignKey(
-        Game, on_delete=models.CASCADE, related_name="%(class)s_base_game"
-    )
-    dlcGame = models.ForeignKey(
-        Game, on_delete=models.CASCADE, related_name="%(class)s_dlc_game"
-    )
-
-
-class GameCollection(models.Model):
-    # this should be unique
-    containingGame = models.ForeignKey(
-        Game, on_delete=models.CASCADE, related_name="%(class)s_containing_game"
-    )
-    containedGames = models.ManyToManyField(
-        Game, related_name="%(class)s_contained_games"
-    )
 
 
 class Release(models.Model):

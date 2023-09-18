@@ -1,4 +1,4 @@
-from backend.models import Game, GameDlc, Genre, Platform, Region, Company, Franchise, Release, Person, GameCollection
+from backend.models import Game, Genre, Platform, Region, Company, Franchise, Release, Person
 
 
 def run():
@@ -94,8 +94,9 @@ def run():
     bsTwoMinervaInitialRelease.platforms.set([xbox360, ps3])
     bsTwoMinervaInitialRelease.save()
 
-    # Assocaite Bioshock 2 with it's DLC
-    GameDlc.objects.create(baseGame=bioshockTwo, dlcGame=bioshockTwoMinerva)
+    # Associate Bioshock 2 with it's DLC
+    bioshockTwo.dlc.set([bioshockTwoMinerva])
+    bioshockTwo.save()
     
     # Bioshock the collection
     bsCollect = Game(
@@ -103,13 +104,8 @@ def run():
     )
     bsCollect.save()
     bsCollect.developers.set([blindSquirrel])
+    bsCollect.collectees.set([bioshock, bioshockTwo])
     bsCollect.save()
-
-    # Associate collection with 1 & 2.
-    collection, _ = GameCollection.objects.get_or_create(containingGame=bsCollect)
-    collection.save()
-
-    collection.containedGames.set([bioshock, bioshockTwo])
 
     bsCollectionRls = Release(
         release_date="2016-09-13",
