@@ -8,6 +8,12 @@ class Genre(models.Model):
         return self.name
 
 
+class Mode(models.Model):
+    mode = models.CharField(max_length=200)
+
+    def __str__(self):
+        return self.mode
+
 class Platform(models.Model):
     name = models.CharField(max_length=200)
 
@@ -50,6 +56,7 @@ class Game(models.Model):
     franchises = models.ManyToManyField(Franchise)
     developers = models.ManyToManyField(Company)
     notable_developers = models.ManyToManyField(Person, through="NotableDeveloper")
+    modes = models.ManyToManyField(Mode)
 
     # Self many-to-many references.
     # Setting this will imply that the games in this list are DLC, and that THIS game is the "parent" game.
@@ -63,8 +70,9 @@ class Game(models.Model):
 
     # TODO
     # engine
-    # mode: singleplayer, co-op, multiplayer
     # logical-sequel/prequel (put into franchise (?))
+    # awards
+    # reviews
 
     def __str__(self):
         return f"{self.title}"

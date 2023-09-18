@@ -8,6 +8,7 @@ from backend.models import (
     Release,
     Person,
     NotableDeveloper,
+    Mode,
 )
 
 
@@ -23,6 +24,7 @@ def run():
             "genres": ["First-Person Shooter", "SystemShock-Like"],
             "franchises": ["BioShock"],
             "developers": ["2K Boston", "2K Australia"],
+            "modes": ["Singleplayer"],
             "notableDevelopers": [
                 {
                     "name": "Ken Levine",
@@ -63,6 +65,7 @@ def run():
             "genres": ["First-Person Shooter", "SystemShock-Like"],
             "franchises": ["BioShock"],
             "developers": ["2K Marin"],
+            "modes": ["Singleplayer", "Multiplayer"],
             "notableDevelopers": [
                 {
                     "name": "Jordan Thomas",
@@ -84,6 +87,7 @@ def run():
             "franchises": ["BioShock"],
             "developers": ["2K Marin"],
             "notableDevelopers": [],
+            "modes": ["Singleplayer"],
             "releases": [
                 {
                     "release_date": "2010-08-31",
@@ -95,10 +99,36 @@ def run():
             "dlc_of": "BioShock 2",
         },
         {
+            "title": "BioShock Infinite: Industrial Revolution",
+            "genres": ["Puzzle"],
+            "franchises": ["BioShock"],
+            "developers": ["Lazy 8 Studios"],
+            "modes": ["Singleplayer"],
+            "notableDevelopers": [
+                {
+                    "name": "Joshua Davis",
+                    "role": "UX Developer",
+                },
+                {
+                    "name": "Jorge Lacera",
+                    "role": "Art Director",
+                },
+            ],
+            "releases": [
+                {
+                    "release_date": "2013-01-24",
+                    "region": "NA",
+                    "publishers": ["2K Games"],
+                    "platforms": ["PC"],
+                },
+            ],
+        },
+        {
             "title": "BioShock Infinite",
             "genres": ["First-Person Shooter", "SystemShock-Like"],
             "franchises": ["BioShock"],
             "developers": ["Irrational Games"],
+            "modes": ["Singleplayer"],
             "notableDevelopers": [
                 {
                     "name": "Ken Levine",
@@ -120,6 +150,7 @@ def run():
             "franchises": ["BioShock"],
             "developers": ["Blind Squirrel Games"],
             "notableDevelopers": [],
+            "modes": ["Singleplayer"],
             "releases": [
                 {
                     "release_date": "2016-09-13",
@@ -153,6 +184,10 @@ def run():
             NotableDeveloper.objects.create(
                 developer=personDb, game=dbg, role=nd["role"]
             )
+
+        for m in g["modes"]:
+            mDb, _ = Mode.objects.get_or_create(mode=m)
+            dbg.modes.add(mDb)
 
         for r in g["releases"]:
             rls, _ = Release.objects.get_or_create(

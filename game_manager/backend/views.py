@@ -43,6 +43,9 @@ def index(request):
         if game.genres.all().count() > 0:
             res += f'<div><span>{", ".join(g.name for g in game.genres.all())}</span></div>'
 
+        if game.modes.all().count() > 0:
+            res += f'<div><span>{", ".join(g.mode for g in game.modes.all())}</span></div>'
+
         # releases
         releases = Release.objects.filter(game=game)
         for release in releases:
