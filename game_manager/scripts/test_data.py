@@ -1,118 +1,180 @@
-from backend.models import Game, Genre, Platform, Region, Company, Franchise, Release, Person
+from backend.models import (
+    Game,
+    Genre,
+    Platform,
+    Region,
+    Company,
+    Franchise,
+    Release,
+    Person,
+    NotableDeveloper,
+)
 
 
 def run():
-    xbox360, _ = Platform.objects.get_or_create(name="Xbox 360")
-    pc, _ = Platform.objects.get_or_create(name="PC")
-    ps3, _ = Platform.objects.get_or_create(name="PS3")
-    fpsGenre, _ = Genre.objects.get_or_create(name="First-Person Shooter")
-    sslGenre, _ = Genre.objects.get_or_create(name="SystemShock-Like")
-    naRegion, _ = Region.objects.get_or_create(display_name="North America", short_code="NA")
-    twoK, _ = Company.objects.get_or_create(name="2K Games")
-    twoKBoston, _ = Company.objects.get_or_create(name="2K Boston")
-    twoKAustralia, _ = Company.objects.get_or_create(name="2K Australia")
-    twoKMarin, _ = Company.objects.get_or_create(name="2K Marin")
-    blindSquirrel, _ = Company.objects.get_or_create(name="Blind Squirrel Games")
-    bioshockFranchise, _ = Franchise.objects.get_or_create(name="BioShock")
-
-    # people
-    kenLevine, _ = Person.objects.get_or_create(name="Ken Levine")
-
-
-    Release.objects.all().delete()
-    Game.objects.all().delete()
-
-    # BioShock 1
-    bioshock = Game(
-        title="BioShock",
+    # I must be made prior to use, because I have more than just a name field.
+    naRegion, _ = Region.objects.get_or_create(
+        display_name="North America", short_code="NA"
     )
-    bioshock.save()
-    bioshock.genres.set([fpsGenre, sslGenre])
-    bioshock.franchises.set([bioshockFranchise])
-    bioshock.developers.set([twoKBoston, twoKAustralia])
-    bioshock.directors.set([kenLevine])
-    bioshock.save()
 
-    bsInitialRelease = Release(
-        release_date="2007-08-21",
-        region=naRegion,
-        game=bioshock,
-    )
-    bsInitialRelease.save()
-    bsInitialRelease.publishers.set([twoK])
-    bsInitialRelease.platforms.set([xbox360, pc])
-    bsInitialRelease.save()
+    games = [
+        {
+            "title": "BioShock",
+            "genres": ["First-Person Shooter", "SystemShock-Like"],
+            "franchises": ["BioShock"],
+            "developers": ["2K Boston", "2K Australia"],
+            "notableDevelopers": [
+                {
+                    "name": "Ken Levine",
+                    "role": "director",
+                },
+                {
+                    "name": "Ken Levine",
+                    "role": "writer",
+                },
+                {
+                    "name": "Garry Schyman",
+                    "role": "composer",
+                },
+            ],
+            "releases": [
+                {
+                    "release_date": "2007-08-21",
+                    "region": "NA",
+                    "publishers": ["2K Games"],
+                    "platforms": ["Xbox 360", "PC"],
+                },
+                {
+                    "release_date": "2008-10-21",
+                    "region": "NA",
+                    "publishers": ["2K Games"],
+                    "platforms": ["PS3"],
+                },
+                {
+                    "release_date": "2009-10-01",
+                    "region": "NA",
+                    "publishers": ["Feral Interactive"],
+                    "platforms": ["MacOS"],
+                },
+            ],
+        },
+        {
+            "title": "BioShock 2",
+            "genres": ["First-Person Shooter", "SystemShock-Like"],
+            "franchises": ["BioShock"],
+            "developers": ["2K Marin"],
+            "notableDevelopers": [
+                {
+                    "name": "Jordan Thomas",
+                    "role": "director",
+                },
+            ],
+            "releases": [
+                {
+                    "release_date": "2010-02-09",
+                    "region": "NA",
+                    "publishers": ["2K Games"],
+                    "platforms": ["Xbox 360", "PC", "PS3"],
+                },
+            ],
+        },
+        {
+            "title": "BioShock 2: Minerva's Den",
+            "genres": ["First-Person Shooter", "SystemShock-Like"],
+            "franchises": ["BioShock"],
+            "developers": ["2K Marin"],
+            "notableDevelopers": [],
+            "releases": [
+                {
+                    "release_date": "2010-08-31",
+                    "region": "NA",
+                    "publishers": ["2K Games"],
+                    "platforms": ["Xbox 360", "PS3"],
+                },
+            ],
+            "dlc_of": "BioShock 2",
+        },
+        {
+            "title": "BioShock Infinite",
+            "genres": ["First-Person Shooter", "SystemShock-Like"],
+            "franchises": ["BioShock"],
+            "developers": ["Irrational Games"],
+            "notableDevelopers": [
+                {
+                    "name": "Ken Levine",
+                    "role": "director",
+                },
+            ],
+            "releases": [
+                {
+                    "release_date": "2013-03-26",
+                    "region": "NA",
+                    "publishers": ["2K Games"],
+                    "platforms": ["Xbox 360", "PC", "PS3"],
+                },
+            ],
+        },
+        {
+            "title": "BioShock: The Collection",
+            "genres": ["First-Person Shooter", "SystemShock-Like"],
+            "franchises": ["BioShock"],
+            "developers": ["Blind Squirrel Games"],
+            "notableDevelopers": [],
+            "releases": [
+                {
+                    "release_date": "2016-09-13",
+                    "region": "NA",
+                    "publishers": ["2K Games"],
+                    "platforms": ["Xbox 360", "PS3"],
+                },
+            ],
+            "collection_of": ["BioShock", "BioShock 2", "BioShock Infinite"],
+        },
+    ]
 
-    bsPsFollowupRelease = Release(
-        release_date="2008-10-21",
-        region=naRegion,
-        game=bioshock,
-    )
-    bsPsFollowupRelease.save()
-    bsPsFollowupRelease.publishers.set([twoK])
-    bsPsFollowupRelease.platforms.set([ps3])
-    bsPsFollowupRelease.save()
+    for g in games:
+        dbg = Game(title=g["title"])
+        dbg.save()
 
-    # BioShock 2
-    bioshockTwo = Game(
-        title="BioShock 2",
-    )
-    bioshockTwo.save()
-    bioshockTwo.genres.set([fpsGenre, sslGenre])
-    bioshockTwo.franchises.set([bioshockFranchise])
-    bioshockTwo.developers.set([twoKMarin])
+        for genre in g["genres"]:
+            dbGenre, _ = Genre.objects.get_or_create(name=genre)
+            dbg.genres.add(dbGenre)
 
-    bioshockTwo.save()
+        for franchise in g["franchises"]:
+            fdb, _ = Franchise.objects.get_or_create(name=franchise)
+            dbg.franchises.add(fdb)
 
-    bsTwoInitialRelease = Release(
-        release_date="2010-02-09",
-        region=naRegion,
-        game=bioshockTwo,
-    )
-    bsTwoInitialRelease.save()
-    bsTwoInitialRelease.publishers.set([twoK])
-    bsTwoInitialRelease.platforms.set([xbox360, pc, ps3])
-    bsTwoInitialRelease.save()
+        for developers in g["developers"]:
+            dbDev, _ = Company.objects.get_or_create(name=developers)
+            dbg.developers.add(dbDev)
 
-    # BioShock 2 Minerva's Den
-    bioshockTwoMinerva = Game(
-        title="BioShock 2: Minerva's Den",
-    )
-    bioshockTwoMinerva.save()
-    bioshockTwoMinerva.genres.set([fpsGenre, sslGenre])
-    bioshockTwoMinerva.franchises.set([bioshockFranchise])
-    bioshockTwoMinerva.developers.set([twoKMarin])
-    bioshockTwoMinerva.save()
+        for nd in g["notableDevelopers"]:
+            personDb, _ = Person.objects.get_or_create(name=nd["name"])
+            NotableDeveloper.objects.create(
+                developer=personDb, game=dbg, role=nd["role"]
+            )
 
-    bsTwoMinervaInitialRelease = Release(
-        release_date="2010-08-31",
-        region=naRegion,
-        game=bioshockTwoMinerva,
-    )
-    bsTwoMinervaInitialRelease.save()
-    bsTwoMinervaInitialRelease.publishers.set([twoK])
-    bsTwoMinervaInitialRelease.platforms.set([xbox360, ps3])
-    bsTwoMinervaInitialRelease.save()
+        for r in g["releases"]:
+            rls, _ = Release.objects.get_or_create(
+                release_date=r["release_date"],
+                region=Region.objects.get(short_code=r["region"]),
+                game=dbg,
+            )
+            for pub in r["publishers"]:
+                pubDb, _ = Company.objects.get_or_create(name=pub)
+                rls.publishers.add(pubDb)
+            for plat in r["platforms"]:
+                platDb, _ = Platform.objects.get_or_create(name=plat)
+                rls.platforms.add(platDb)
 
-    # Associate Bioshock 2 with it's DLC
-    bioshockTwo.dlc.set([bioshockTwoMinerva])
-    bioshockTwo.save()
-    
-    # Bioshock the collection
-    bsCollect = Game(
-        title="BioShock: The Collection",
-    )
-    bsCollect.save()
-    bsCollect.developers.set([blindSquirrel])
-    bsCollect.collectees.set([bioshock, bioshockTwo])
-    bsCollect.save()
+        if "dlc_of" in g:
+            # we are a dlc game.
+            owner = Game.objects.get(title=g["dlc_of"])
+            owner.dlc.add(dbg)
 
-    bsCollectionRls = Release(
-        release_date="2016-09-13",
-        region=naRegion,
-        game=bsCollect,
-    )
-    bsCollectionRls.save()
-    bsCollectionRls.publishers.set([twoK])
-    bsCollectionRls.platforms.set([xbox360, ps3])
-    bsCollectionRls.save()
+        if "collection_of" in g:
+            # we are a collection of other games.
+            for collectee in g["collection_of"]:
+                dbg.collectees.add(Game.objects.get(title=collectee))
+
+        dbg.save()

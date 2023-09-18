@@ -1,7 +1,7 @@
 from django.http import HttpResponse, JsonResponse
 from django.core import serializers
 
-from .models import Game, Release, Platform, Genre
+from .models import Game, Release, Platform, Genre, NotableDeveloper
 
 def healthcheck(request):
     return HttpResponse("ok")
@@ -19,14 +19,25 @@ def index(request):
             for collectee in collectees:
                 res += f'<li>{collectee.title}</li>'
             res += '</ul></div>'
+        
+        # has dlc
+        dlc = game.dlc.all()
+        if dlc.count() > 0:
+            res += '<div>I have DLC:<ul>'
+            for d in dlc:
+                res += f'<li>{d.title}</li>'
+            res += '</ul></div>'
+
 
         # developer(s)
         if game.developers.all().count() > 0:
-            res += f'<div>by: {", ".join(g.name for g in game.developers.all())}</div>'
+            res += f'<div>Developed by: {", ".join(g.name for g in game.developers.all())}</div>'
 
         # people
-        if game.directors.all().count() > 0:
-            res += f'<div>director(s): {",".join(p.name for p in game.directors.all())}</div>'
+        devs = NotableDeveloper.objects.filter(game=game)
+        if devs.count() > 0:
+            for dev in devs.all():
+                res += f'<div>&emsp;{dev.role}: {dev.developer.name}</div>'
 
         # genres
         if game.genres.all().count() > 0:
@@ -38,16 +49,7 @@ def index(request):
             platforms = release.platforms.all()
             publishers = release.publishers.all()
             res += f'<div>&emsp;released on {release.release_date} for {" & ".join(plat.name for plat in platforms)} in {release.region.display_name} by {" & ".join(pub.name for pub in publishers)}</div>'
-        
-        # has dlc
-        dlc = game.dlc.all()
-        if dlc.count() > 0:
-            res += '<div>I have DLC:<ul>'
-            for d in dlc:
-                res += f'<li>{d.title}</li>'
-            res += '</ul></div>'
-        
-        
+
         res += "</div>"
 
     return HttpResponse(res)
