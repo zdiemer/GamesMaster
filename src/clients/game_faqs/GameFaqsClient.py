@@ -3,7 +3,7 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List
 
-from bs4 import BeautifulSoup, NavigableString, ResultSet
+from bs4 import BeautifulSoup, ResultSet
 
 from clients import ClientBase, DatePart, RateLimit
 from config import Config
