@@ -1,7 +1,7 @@
 from django.http import HttpResponse, JsonResponse
 from django.core import serializers
 
-from .models import Game, Release, Platform, Genre, NotableDeveloper
+from .models import Game, Release, Platform, Genre, NotableDeveloper, Purchase
 
 def healthcheck(request):
     return HttpResponse("ok")
@@ -54,5 +54,16 @@ def index(request):
             res += f'<div>&emsp;released on {release.release_date} for {" & ".join(plat.name for plat in platforms)} in {release.region.display_name} by {" & ".join(pub.name for pub in publishers)}</div>'
 
         res += "</div>"
+    
+    purchased_games = Purchase.objects.all()
+    res += '<h1>Games in Collection</h1>'
+    for purchase in purchased_games:
+        game = purchase.release.game
+        res += f"<div><h2>{game.title}</h2>"
+        res += f"<div>purchased for: ${purchase.purchase_price} on {purchase.purchase_date} in {purchase.get_purchase_format_display()}</div>"
+        res += f""
+
+        res += "</div>"
+
 
     return HttpResponse(res)

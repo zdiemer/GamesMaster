@@ -23,7 +23,7 @@ class Platform(models.Model):
 
 class Region(models.Model):
     display_name = models.CharField(max_length=200)
-    short_code = models.CharField(max_length=2)
+    short_code = models.CharField(max_length=10)
 
     def __str__(self):
         return f"{self.display_name}"
@@ -52,6 +52,8 @@ class Franchise(models.Model):
 
 class Game(models.Model):
     title = models.CharField(max_length=200)
+    # If a game has been ported to a new engine, a new game entry should be created.
+    engine = models.CharField(max_length=200)
     genres = models.ManyToManyField(Genre)
     franchises = models.ManyToManyField(Franchise)
     developers = models.ManyToManyField(Company)
@@ -69,7 +71,6 @@ class Game(models.Model):
     )
 
     # TODO
-    # engine
     # logical-sequel/prequel (put into franchise (?))
     # awards
     # reviews
@@ -90,3 +91,53 @@ class Release(models.Model):
     region = models.ForeignKey(Region, on_delete=models.PROTECT)
     game = models.ForeignKey(Game, on_delete=models.PROTECT)
     publishers = models.ManyToManyField(Company)
+
+class Purchase(models.Model):
+    SEALED = "SL"
+    COMPLETE = "CO"
+    GAME_AND_BOX_ONLY = "GB"
+    GAME_ONLY = "GO"
+    OWNERSHIP_TYPE_CHOICES = [
+        (SEALED, "Sealed"),
+        (COMPLETE, "Complete"),
+        (GAME_AND_BOX_ONLY, "Game and Box Only"),
+        (GAME_ONLY, "Game Only"),
+    ]
+    ownership_type = models.CharField(
+        max_length=2,
+        choices=OWNERSHIP_TYPE_CHOICES,
+    )
+
+    BROKEN_BOX = "BB"
+    SCRATCHES = "SC"
+    STICKERS = "ST"
+
+    CONDITION_CHOICES = [
+        (BROKEN_BOX, "Broken Box"),
+        (SCRATCHES, "Scratches"),
+        (STICKERS, "Stickers")
+    ]
+    condition_type = models.CharField(
+        max_length=2,
+        choices=CONDITION_CHOICES,
+        null=True,
+    )
+
+    PHYSICAL = "PL"
+    DIGITAL = "DG"
+    PURCHASE_FORMAT_CHOICES = [
+        (PHYSICAL, "Physical"),
+        (DIGITAL, "Digital"),
+    ]
+    purchase_format = models.CharField(
+        max_length=2,
+        choices=PURCHASE_FORMAT_CHOICES,
+    )
+
+    purchase_date = models.DateField()
+    purchase_price = models.DecimalField(
+        decimal_places=2,
+        max_digits=10,
+    )
+
+    release = models.ForeignKey(Release, on_delete=models.CASCADE)

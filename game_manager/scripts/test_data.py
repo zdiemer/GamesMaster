@@ -9,13 +9,20 @@ from backend.models import (
     Person,
     NotableDeveloper,
     Mode,
+    Purchase,
 )
 
 
 def run():
     # I must be made prior to use, because I have more than just a name field.
-    naRegion, _ = Region.objects.get_or_create(
+    Region.objects.create(
         display_name="North America", short_code="NA"
+    )
+    Region.objects.create(
+        display_name="Europe, Africa, and Asia", short_code="PAL"
+    )
+    Region.objects.create(
+        display_name="Worldwide", short_code="WW"
     )
 
     games = [
@@ -43,6 +50,20 @@ def run():
                 {
                     "release_date": "2007-08-21",
                     "region": "NA",
+                    "publishers": ["2K Games"],
+                    "platforms": ["Xbox 360", "PC"],
+                    "purchases": [
+                        {
+                            "ownership_type": "CO",
+                            "purchase_format": "PL",
+                            "purchase_date": "2007-08-21",
+                            "purchase_price": 59.99
+                        },
+                    ],
+                },
+                {
+                    "release_date": "2007-08-24",
+                    "region": "PAL",
                     "publishers": ["2K Games"],
                     "platforms": ["Xbox 360", "PC"],
                 },
@@ -117,7 +138,7 @@ def run():
             "releases": [
                 {
                     "release_date": "2013-01-24",
-                    "region": "NA",
+                    "region": "WW",
                     "publishers": ["2K Games"],
                     "platforms": ["PC"],
                 },
@@ -201,6 +222,14 @@ def run():
             for plat in r["platforms"]:
                 platDb, _ = Platform.objects.get_or_create(name=plat)
                 rls.platforms.add(platDb)
+            
+            if "purchases" in r:
+                for pur in r["purchases"]:
+                    pur["release"] = rls
+                    Purchase.objects.create(
+                        **pur
+                    )
+
 
         if "dlc_of" in g:
             # we are a dlc game.
