@@ -11,6 +11,7 @@ Typical usage:
 """
 
 import asyncio
+import json
 from typing import Any, Dict, List, Optional, Type, Set
 
 import pandas as pd
@@ -45,18 +46,32 @@ class SteamWrapper(clients.ClientBase):
     async def match_game(self, game: ExcelGame) -> List[GameMatch]:
         if game.platform.lower() != "pc":
             return []
-        try:
-            results = self._client.apps.search_games(game.title)
-            matches: List[GameMatch] = []
 
-            for res in results["apps"]:
-                if self.validator.titles_equal_fuzzy(res["name"], game.title):
-                    matches.append(GameMatch(res["name"], res["link"], res["id"], res))
+        async def do_search() -> Dict[str, list]:
+            res = self._client.apps.search_games(game.title)
+            await asyncio.sleep(1)
+            return res
 
-            return matches
-        except ValueError:
-            # Swallowing exceptions from Steam API library
+        max_retries = 3
+        retries = 0
+        results: List[HowLongToBeatEntry] = []
+
+        while not any(results) and retries < max_retries:
+            try:
+                results = await do_search()
+            except Exception:
+                retries += 1
+
+        if retries == max_retries:
             return []
+
+        matches: List[GameMatch] = []
+
+        for res in results["apps"]:
+            if self.validator.titles_equal_fuzzy(res["name"], game.title):
+                matches.append(GameMatch(res["name"], res["link"], res["id"], res))
+
+        return matches
 
 
 class HLTBWrapper(clients.ClientBase):
@@ -72,9 +87,24 @@ class HLTBWrapper(clients.ClientBase):
         super().__init__(validator, config)
 
     async def match_game(self, game: ExcelGame) -> List[GameMatch]:
-        results: List[HowLongToBeatEntry] = await HowLongToBeat().async_search(
-            game.title
-        )
+        async def do_search() -> List[HowLongToBeatEntry]:
+            res = await HowLongToBeat().async_search(game.title)
+            await asyncio.sleep(1)
+            return res
+
+        max_retries = 3
+        retries = 0
+        results: List[HowLongToBeatEntry] = []
+
+        while not any(results) and retries < max_retries:
+            try:
+                results = await do_search()
+            except Exception:
+                retries += 1
+
+        if retries == max_retries:
+            return []
+
         matches: List[GameMatch] = []
 
         for res in results:
@@ -178,6 +208,8 @@ class ExcelParser:
             return matches
         client = self._ALL_CLIENTS[source](self.__validator, self.config)
         games = games_override if games_override is not None else self.games
+        row_count, _ = games.shape
+        rows_processed = 0
         for _, row in games.iterrows():
             game = ExcelGame(
                 row["Id"],
@@ -199,7 +231,14 @@ class ExcelParser:
                 gmatch.source = source
 
             matches[game.id] = game_matches
+            rows_processed += 1
 
+            print(
+                f"{source}: Processed {game.title} - "
+                f"{rows_processed}/{row_count} ({(rows_processed/row_count)*100:,.2f}%)"
+            )
+
+        print(f"{source}: Finished processing all rows")
         return matches
 
     def get_match_option_selection(
@@ -358,9 +397,11 @@ class ExcelParser:
                     f"for {game.full_name}"
                 )
                 final_results.update(game_results)
+        with open("static/matches.json", "w", encoding="utf-8") as file:
+            file.write(json.dumps(final_results))
         return final_results
 
 
 if __name__ == "__main__":
     parser = ExcelParser()
-    asyncio.run(parser.match_all_games(parser.games))
+    asyncio.run(parser.match_all_games())

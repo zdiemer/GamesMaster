@@ -24,7 +24,7 @@ class MetacriticClient(ClientBase):
 
     async def search(self, game: str, offset: int = 0, limit: int = 30) -> dict:
         return await self.get(
-            f"{self.__BASE_FANDOM_METACRITIC_URL}/search/{urllib.parse.quote(game)}/web",
+            f"{self.__BASE_FANDOM_METACRITIC_URL}/search/{urllib.parse.quote(game.replace('/', ''))}/web",
             params={
                 "apiKey": self.__api_key,
                 "offset": offset,

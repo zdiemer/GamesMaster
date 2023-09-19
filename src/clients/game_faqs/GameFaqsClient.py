@@ -3,7 +3,7 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List
 
-from bs4 import BeautifulSoup, ResultSet
+from bs4 import BeautifulSoup, NavigableString, ResultSet
 
 from clients import ClientBase, DatePart, RateLimit
 from config import Config
@@ -15,6 +15,7 @@ from .game_faqs_types import (
     GameFaqsFranchise,
     GameFaqsGame,
     GameFaqsGenre,
+    GameFaqsGuide,
     GameFaqsPlatform,
     GameFaqsRegion,
     GameFaqsRelease,
@@ -123,7 +124,7 @@ class GameFaqsClient(ClientBase):
         "zeebo": "zeebo",
         "ios": "iphone",
     }
-    __PERCENT_CHANCE_DISGUISE_TRAFFIC = 0.50
+    __PERCENT_CHANCE_DISGUISE_TRAFFIC = 0.20
 
     def __init__(self, validator: MatchValidator, config: Config = None):
         config = config or Config.create()
@@ -141,7 +142,7 @@ class GameFaqsClient(ClientBase):
         if any(a_tags):
             rand_a = random.sample(a_tags, k=1)[0]
             href = str(rand_a["href"]).replace("/", "", 1)
-            print(f"Disguising traffic with {self.__BASE_GAMEFAQS_URL}{href}")
+            print(f"Disguising traffic with {self.__BASE_GAMEFAQS_URL}/{href}")
             await self._make_request(href, as_json=False)
 
     async def home_game_search(self, term: str):
@@ -152,6 +153,88 @@ class GameFaqsClient(ClientBase):
 
     async def release_data_page(self, url: str):
         return await self._make_request(f"{url}/data", as_json=False)
+
+    async def guides_page(self, url: str):
+        return await self._make_request(f"{url}/faqs", as_json=False)
+
+    async def get_guides(self, url: str) -> List[GameFaqsGuide]:
+        html = await self.guides_page(url)
+
+        soup = BeautifulSoup(html, "html.parser")
+        guide_sections = (
+            soup.find_all("ol", {"class": "list flex col1 stripe guides gf_guides"})
+            or []
+        )
+
+        guide_elems = []
+        guides: List[GameFaqsGuide] = []
+
+        for section in guide_sections:
+            guide_elems.extend(section.find_all("li") or [])
+
+        for guide in guide_elems:
+            gf_guide = GameFaqsGuide()
+
+            gf_guide.platform = GameFaqsPlatform(guide["data-platform"])
+
+            title_elem = guide.find_next("div", {"class": "float_l"})
+            if title_elem is not None:
+                gf_guide.title = title_elem.a.text.strip()
+                gf_guide.url = f'{self.__BASE_GAMEFAQS_URL}{title_elem.a["href"]}'
+
+                gf_guide.author_name = title_elem.span.a.text.strip()
+                gf_guide.author_url = (
+                    f'{self.__BASE_GAMEFAQS_URL}{title_elem.span.a["href"]}'
+                )
+
+                flair_elem = guide.find_next("span", {"class": "flair"})
+                if flair_elem is not None:
+                    gf_guide.html = flair_elem.text.strip() == "HTML"
+
+            version_elem = guide.find_next("div", {"class": "meta float_r"})
+            if version_elem is not None:
+                vers_string = str(version_elem.text.strip().split(",")[0])
+                if vers_string.startswith("v"):
+                    gf_guide.version = vers_string
+
+                if version_elem.span.has_attr("title"):
+                    gf_guide.updated_date = datetime.strptime(
+                        version_elem.span["title"], "%m/%d/%Y"
+                    )
+
+            accolade_elem = guide.find_next("div", {"class": "meta float_l bold ital"})
+            if accolade_elem is not None:
+                accolade = accolade_elem.text.strip()
+                if accolade == "*Highest Rated*":
+                    gf_guide.highest_rated = True
+                elif accolade == "*Most Recommended*":
+                    gf_guide.most_recommended = True
+                elif accolade.startswith("*FAQ of the Month Winner:"):
+                    gf_guide.faq_of_the_month_winner = True
+                    faq_of_the_month = datetime.strptime(
+                        accolade.split(":")[1].strip(), "%B %y"
+                    )
+                    gf_guide.faq_of_the_month_month = datetime.strftime(
+                        faq_of_the_month.month, "%B"
+                    )
+                    gf_guide.faq_of_the_month_year = faq_of_the_month.year
+
+            if (
+                not gf_guide.html
+                and gf_guide.url is not None
+                and not (gf_guide.title or "").endswith("Map")
+            ):
+                game_guide = await self.get(gf_guide.url, json=False)
+                soup = BeautifulSoup(game_guide, "html.parser")
+                guide_contents = soup.find_next("div", {"id": "faqwrap"})
+
+                if guide_contents is not None:
+                    gf_guide.full_text = guide_contents.get_text(" ").strip()
+
+            print(gf_guide)
+            guides.append(gf_guide)
+
+        return guides
 
     async def get_gamefaqs_game(self, match: Dict, platform: str) -> GameFaqsGame:
         url = match["board_url"].replace(
@@ -277,6 +360,7 @@ class GameFaqsClient(ClientBase):
             releases.append(release)
 
         gf_game.releases = releases
+        gf_game.guides = await self.get_guides(url)
 
         return gf_game
 

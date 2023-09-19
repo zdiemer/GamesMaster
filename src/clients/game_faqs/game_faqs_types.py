@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime
 from enum import Enum
-from typing import List
+from typing import List, Optional
 
 
 class GameFaqsPlatform:
@@ -62,15 +63,15 @@ class GameFaqsReleaseStatus(Enum):
 
 
 class GameFaqsRelease:
-    release_day: int = None
-    release_month: int = None
-    release_year: int = None
-    release_region: GameFaqsRegion = None
-    publisher: GameFaqsCompany = None
-    product_id: str = None
-    distribution_or_barcode: str = None
-    age_rating: str = None
-    title: str = None
+    release_day: Optional[int] = None
+    release_month: Optional[int] = None
+    release_year: Optional[int] = None
+    release_region: Optional[GameFaqsRegion] = None
+    publisher: Optional[GameFaqsCompany] = None
+    product_id: Optional[str] = None
+    distribution_or_barcode: Optional[str] = None
+    age_rating: Optional[str] = None
+    title: Optional[str] = None
     status: GameFaqsReleaseStatus = GameFaqsReleaseStatus.RELEASED
 
     def __str__(self) -> str:
@@ -106,21 +107,57 @@ class GameFaqsFranchise:
         return self.__str__()
 
 
+class GameFaqsGuide:
+    title: Optional[str] = None
+    url: Optional[str] = None
+    author_name: Optional[str] = None
+    author_url: Optional[str] = None
+    version: Optional[str] = None
+    updated_date: Optional[datetime] = None
+    full_text: Optional[str] = None
+    highest_rated: bool = False
+    most_recommended: bool = False
+    html: bool = False
+    platform: Optional[GameFaqsPlatform] = None
+    faq_of_the_month_winner: bool = False
+    faq_of_the_month_month: Optional[str] = None
+    faq_of_the_month_year: Optional[int] = None
+    incomplete: bool = False
+
+    def __str__(self) -> str:
+        return str(
+            {
+                "title": self.title,
+                "url": self.url,
+                "author_name": self.author_name,
+                "author_url": self.author_url,
+                "version": self.version,
+                "updated_date": self.updated_date,
+                "full_text": self.full_text,
+                "platform": self.platform,
+            }
+        )
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
+
 class GameFaqsGame:
-    id: int = None
-    title: str = None
-    url: str = None
-    platform: GameFaqsPlatform = None
-    genre: GameFaqsGenre = None
-    releases: List[GameFaqsRelease] = None
-    developer: GameFaqsCompany = None
-    franchises: List[GameFaqsFranchise] = None
-    user_rating: float = None
-    user_rating_count: int = None
-    user_difficulty: float = None
-    user_difficulty_count: int = None
-    user_length_hours: float = None
-    user_length_hours_count: int = None
+    id: Optional[int] = None
+    title: Optional[str] = None
+    url: Optional[str] = None
+    platform: Optional[GameFaqsPlatform] = None
+    genre: Optional[GameFaqsGenre] = None
+    releases: Optional[List[GameFaqsRelease]] = None
+    developer: Optional[GameFaqsCompany] = None
+    franchises: Optional[List[GameFaqsFranchise]] = None
+    user_rating: Optional[float] = None
+    user_rating_count: Optional[int] = None
+    user_difficulty: Optional[float] = None
+    user_difficulty_count: Optional[int] = None
+    user_length_hours: Optional[float] = None
+    user_length_hours_count: Optional[int] = None
+    guides: Optional[List[GameFaqsGuide]] = None
 
     def __str__(self) -> str:
         return str(
@@ -138,6 +175,7 @@ class GameFaqsGame:
                 "user_difficulty_count": self.user_difficulty_count,
                 "user_length_hours": self.user_length_hours,
                 "user_length_hours_count": self.user_length_hours_count,
+                "guides": self.guides,
             }
         )
 
