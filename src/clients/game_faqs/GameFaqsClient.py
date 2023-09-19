@@ -1,158 +1,25 @@
-from __future__ import annotations
-
+import random
 import re
 from datetime import datetime
-from enum import Enum
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, ResultSet
 
-from clients.ClientBase import ClientBase, DatePart, RateLimit
+from clients import ClientBase, DatePart, RateLimit
 from config import Config
 from excel_game import ExcelGame
 from game_match import GameMatch
-from match_validator import MatchValidator, ValidationInfo
-
-
-class GameFaqsPlatform:
-    name: str
-
-    def __init__(self, name: str):
-        self.name = name
-
-    def __str__(self) -> str:
-        return self.name
-
-    def __repr__(self) -> str:
-        return self.__str__()
-
-
-class GameFaqsGenre:
-    name: str
-    parent_genre: GameFaqsGenre
-
-    def __init__(self, name: str, parent_genre: GameFaqsGenre = None):
-        self.name = name
-        self.parent_genre = parent_genre
-
-    def __str__(self) -> str:
-        return str({"name": self.name, "parent_genre": self.parent_genre})
-
-    def __repr__(self) -> str:
-        return self.__str__()
-
-
-class GameFaqsCompany:
-    name: str
-
-    def __init__(self, name: str):
-        self.name = name
-
-    def __str__(self) -> str:
-        return self.name
-
-    def __repr__(self) -> str:
-        return self.__str__()
-
-
-class GameFaqsRegion(Enum):
-    JP = "JP"
-    US = "US"
-    EU = "EU"
-    AU = "AU"
-    KO = "KO"
-    AS = "AS"
-    SA = "SA"
-
-
-class GameFaqsReleaseStatus(Enum):
-    RELEASED = 1
-    CANCELED = 2
-    UNRELEASED = 3
-
-
-class GameFaqsRelease:
-    release_day: int = None
-    release_month: int = None
-    release_year: int = None
-    release_region: GameFaqsRegion = None
-    publisher: GameFaqsCompany = None
-    product_id: str = None
-    distribution_or_barcode: str = None
-    age_rating: str = None
-    title: str = None
-    status: GameFaqsReleaseStatus = GameFaqsReleaseStatus.RELEASED
-
-    def __str__(self) -> str:
-        return str(
-            {
-                "release_day": self.release_day,
-                "release_month": self.release_month,
-                "release_year": self.release_year,
-                "release_region": self.release_region.value,
-                "publisher": self.publisher,
-                "product_id": self.product_id,
-                "distribution_or_barcode": self.distribution_or_barcode,
-                "age_rating": self.age_rating,
-                "title": self.title,
-                "status": self.status.name.title(),
-            }
-        )
-
-    def __repr__(self) -> str:
-        return self.__str__()
-
-
-class GameFaqsFranchise:
-    name: str
-
-    def __init__(self, name: str):
-        self.name = name
-
-    def __str__(self) -> str:
-        return self.name
-
-    def __repr__(self) -> str:
-        return self.__str__()
-
-
-class GameFaqsGame:
-    id: int = None
-    title: str = None
-    url: str = None
-    platform: GameFaqsPlatform = None
-    genre: GameFaqsGenre = None
-    releases: List[GameFaqsRelease] = None
-    developer: GameFaqsCompany = None
-    franchises: List[GameFaqsFranchise] = None
-    user_rating: float = None
-    user_rating_count: int = None
-    user_difficulty: float = None
-    user_difficulty_count: int = None
-    user_length_hours: float = None
-    user_length_hours_count: int = None
-
-    def __str__(self) -> str:
-        return str(
-            {
-                "id": self.id,
-                "title": self.title,
-                "url": self.url,
-                "platform": self.platform,
-                "releases": self.releases,
-                "developer": self.developer,
-                "franchises": self.franchises,
-                "user_rating": self.user_rating,
-                "user_rating_count": self.user_rating_count,
-                "user_difficulty": self.user_difficulty,
-                "user_difficulty_count": self.user_difficulty_count,
-                "user_length_hours": self.user_length_hours,
-                "user_length_hours_count": self.user_length_hours_count,
-            }
-        )
-
-    def __repr__(self) -> str:
-        return self.__str__()
+from match_validator import MatchValidator
+from .game_faqs_types import (
+    GameFaqsCompany,
+    GameFaqsFranchise,
+    GameFaqsGame,
+    GameFaqsGenre,
+    GameFaqsPlatform,
+    GameFaqsRegion,
+    GameFaqsRelease,
+    GameFaqsReleaseStatus,
+)
 
 
 class GameFaqsClient(ClientBase):
@@ -256,16 +123,26 @@ class GameFaqsClient(ClientBase):
         "zeebo": "zeebo",
         "ios": "iphone",
     }
+    __PERCENT_CHANCE_DISGUISE_TRAFFIC = 0.50
 
-    def __init__(self, config: Config = None):
+    def __init__(self, validator: MatchValidator, config: Config = None):
         config = config or Config.create()
-        super().__init__(config, RateLimit(2, DatePart.MINUTE), spoof_headers=True)
+        super().__init__(
+            validator, config, RateLimit(2, DatePart.MINUTE), spoof_headers=True
+        )
 
     async def _make_request(
         self, route: str, params: Dict = None, as_json: bool = True
     ):
         url = f"{self.__BASE_GAMEFAQS_URL}/{route}"
         return await self.get(url, params=params, json=as_json)
+
+    async def _disguise(self, a_tags: ResultSet[Any]):
+        if any(a_tags):
+            rand_a = random.sample(a_tags, k=1)[0]
+            href = str(rand_a["href"]).replace("/", "", 1)
+            print(f"Disguising traffic with {self.__BASE_GAMEFAQS_URL}{href}")
+            await self._make_request(href, as_json=False)
 
     async def home_game_search(self, term: str):
         return await self._make_request("ajax/home_game_search", {"term": term})
@@ -286,6 +163,9 @@ class GameFaqsClient(ClientBase):
         soup = BeautifulSoup(html_doc, "html.parser")
         game_info = soup.find("div", {"class": "pod_gameinfo"})
         infos = game_info.find_all("div", {"class": "content"})
+
+        if random.random() <= self.__PERCENT_CHANCE_DISGUISE_TRAFFIC:
+            await self._disguise(soup.find_all("a", href=True))
 
         gf_game = GameFaqsGame()
         gf_game.id = int(match["game_id"])
@@ -319,8 +199,10 @@ class GameFaqsClient(ClientBase):
                     r"(?P<rating>[0-9]+(\.[0-9]+)*) stars* from (?P<count>[0-9]+) users",
                     rating_elem["title"],
                 )
-                gf_game.user_rating = float(results.group("rating"))
-                gf_game.user_rating_count = int(results.group("count"))
+
+                if results is not None:
+                    gf_game.user_rating = float(results.group("rating"))
+                    gf_game.user_rating_count = int(results.group("count"))
 
         difficulty_child = soup.find(id="gs_difficulty_avg")
         if difficulty_child is not None:
@@ -331,8 +213,10 @@ class GameFaqsClient(ClientBase):
                     r"(?P<rating>[0-9]+(\.[0-9]+)*) hearts* from (?P<count>[0-9]+) users",
                     difficulty_elem["title"],
                 )
-                gf_game.user_difficulty = float(results.group("rating"))
-                gf_game.user_difficulty_count = int(results.group("count"))
+
+                if results is not None:
+                    gf_game.user_difficulty = float(results.group("rating"))
+                    gf_game.user_difficulty_count = int(results.group("count"))
 
         length_child = soup.find(id="gs_length_avg_hint")
         if length_child is not None:
@@ -343,8 +227,10 @@ class GameFaqsClient(ClientBase):
                     r"(?P<rating>[0-9]+(\.[0-9]+)*) hours* from (?P<count>[0-9]+) users",
                     length_elem["title"],
                 )
-                gf_game.user_length_hours = float(results.group("rating"))
-                gf_game.user_length_hours_count = int(results.group("count"))
+
+                if results is not None:
+                    gf_game.user_length_hours = float(results.group("rating"))
+                    gf_game.user_length_hours_count = int(results.group("count"))
 
         html_doc = await self.release_data_page(url)
         soup = BeautifulSoup(html_doc, "html.parser")
@@ -394,22 +280,21 @@ class GameFaqsClient(ClientBase):
 
         return gf_game
 
-    async def match_game(
-        self, game: ExcelGame
-    ) -> List[Tuple[GameMatch, ValidationInfo]]:
+    async def match_game(self, game: ExcelGame) -> List[GameMatch]:
         results = await self.home_game_search(game.title)
-        matches: List[Tuple[GameMatch, ValidationInfo]] = []
-        validator = MatchValidator()
+        matches: List[GameMatch] = []
 
         for r in results:
             if r.get("footer"):
                 continue
             if r.get("game_name") and r.get("plats"):
-                match = validator.validate(game, r["game_name"], r["plats"].split(", "))
+                match = self.validator.validate(
+                    game, r["game_name"], r["plats"].split(", ")
+                )
                 if match.matched:
                     gf_game = await self.get_gamefaqs_game(r, game.platform)
-                    if validator.verify_release_year(
-                        game.release_date.year,
+                    if self.validator.verify_release_year(
+                        game.release_year,
                         [
                             rel.release_year
                             for rel in filter(
@@ -421,11 +306,8 @@ class GameFaqsClient(ClientBase):
                         ],
                     ):
                         matches.append(
-                            (
-                                GameMatch(
-                                    gf_game.title, gf_game.url, gf_game.id, gf_game
-                                ),
-                                match,
+                            GameMatch(
+                                gf_game.title, gf_game.url, gf_game.id, gf_game, match
                             )
                         )
 

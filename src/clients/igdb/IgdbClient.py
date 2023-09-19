@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-import asyncio
 import unicodedata
 from datetime import datetime, timedelta
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
-from clients.ClientBase import ClientBase, DatePart, RateLimit
+from clients import ClientBase, DatePart, RateLimit
 from config import Config
 from excel_game import ExcelGame
 from game_match import GameMatch
-from match_validator import MatchValidator, ValidationInfo
+from match_validator import MatchValidator
 
 
 class IgdbClient(ClientBase):
@@ -22,9 +21,9 @@ class IgdbClient(ClientBase):
     __client_secret: str
     __platforms: List[Dict]
 
-    def __init__(self, config: Config = None):
+    def __init__(self, validator: MatchValidator, config: Config = None):
         config = config or Config.create()
-        super().__init__(config, RateLimit(4, DatePart.SECOND))
+        super().__init__(validator, config, RateLimit(4, DatePart.SECOND))
         self.__client_id = config.igdb_client_id
         self.__client_secret = config.igdb_client_secret
         self.__platforms = {}
@@ -78,9 +77,7 @@ class IgdbClient(ClientBase):
     async def release_dates(self, data: str):
         return await self._make_request("release_dates/", data)
 
-    async def match_game(
-        self, game: ExcelGame
-    ) -> List[Tuple[GameMatch, ValidationInfo]]:
+    async def match_game(self, game: ExcelGame) -> List[GameMatch]:
         if not any(self.__platforms):
             await self._init_platforms()
 
@@ -90,8 +87,7 @@ class IgdbClient(ClientBase):
         )
 
         results = await self.games(search_data)
-        matches: List[Tuple[GameMatch, ValidationInfo]] = []
-        validator = MatchValidator()
+        matches: List[GameMatch] = []
 
         for r in results:
             platforms = r.get("platforms") or []
@@ -115,12 +111,12 @@ class IgdbClient(ClientBase):
             if not any(release_years):
                 continue
 
-            match = validator.validate(
+            match = self.validator.validate(
                 game, r.get("name"), platforms_processed, release_years
             )
 
             if match.matched:
-                matches.append((GameMatch(r["name"], r["url"], r["id"], r), match))
+                matches.append(GameMatch(r["name"], r["url"], r["id"], r, match))
             elif r.get("alternative_names") is not None:
                 for alt in r["alternative_names"]:
                     names = await self.alternative_names(
@@ -130,13 +126,13 @@ class IgdbClient(ClientBase):
                     if len(names) != 1:
                         continue
 
-                    match = validator.validate(
+                    match = self.validator.validate(
                         game, names[0].get("name"), platforms_processed, release_years
                     )
 
                     if match.matched:
                         matches.append(
-                            (GameMatch(r["name"], r["url"], r["id"], r), match)
+                            GameMatch(r["name"], r["url"], r["id"], r, match)
                         )
 
         return matches

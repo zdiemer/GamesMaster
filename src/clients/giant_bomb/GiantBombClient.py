@@ -1,14 +1,12 @@
-from __future__ import annotations
-
 import urllib.parse
 from datetime import datetime
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
-from clients.ClientBase import ClientBase, DatePart, RateLimit
+from clients import ClientBase, DatePart, RateLimit
 from config import Config
 from excel_game import ExcelGame
 from game_match import GameMatch
-from match_validator import MatchValidator, ValidationInfo
+from match_validator import MatchValidator
 
 
 class GiantBombClient(ClientBase):
@@ -16,9 +14,10 @@ class GiantBombClient(ClientBase):
 
     __api_key: str
 
-    def __init__(self, config: Config = None):
+    def __init__(self, validator: MatchValidator, config: Config = None):
         config = config or Config.create()
         super().__init__(
+            validator,
             config,
             RateLimit(
                 200,
@@ -94,12 +93,9 @@ class GiantBombClient(ClientBase):
 
         return years
 
-    async def match_game(
-        self, game: ExcelGame
-    ) -> List[Tuple[GameMatch, ValidationInfo]]:
+    async def match_game(self, game: ExcelGame) -> List[GameMatch]:
         results = await self.search(game.title)
-        matches: List[Tuple[GameMatch, ValidationInfo]] = []
-        validator = MatchValidator()
+        matches: List[GameMatch] = []
 
         async def get_years(guid: str):
             return await self.get_release_years(guid)
@@ -108,34 +104,28 @@ class GiantBombClient(ClientBase):
             if r.get("platforms") is None:
                 continue
             platforms = [p["name"] for p in r["platforms"]]
-            match = validator.validate(game, r["name"], platforms)
+            match = self.validator.validate(game, r["name"], platforms)
             if match.matched:
                 if MatchValidator.verify_release_year(
-                    game.release_date.year, await get_years(r["guid"])
+                    game.release_year, await get_years(r["guid"])
                 ):
                     matches.append(
-                        (
-                            GameMatch(r["name"], r["site_detail_url"], r["guid"], r),
-                            match,
-                        )
+                        GameMatch(r["name"], r["site_detail_url"], r["guid"], r, match),
                     )
             elif r.get("aliases") is not None:
                 if any(
                     match.matched
                     for match in [
-                        validator.validate(game, alias, platforms)
+                        self.validator.validate(game, alias, platforms)
                         for alias in r["aliases"].split("\n")
                     ]
                 ):
                     if MatchValidator.verify_release_year(
-                        game.release_date.year, await get_years(r["guid"])
+                        game.release_year, await get_years(r["guid"])
                     ):
                         matches.append(
-                            (
-                                GameMatch(
-                                    r["name"], r["site_detail_url"], r["guid"], r
-                                ),
-                                match,
-                            )
+                            GameMatch(
+                                r["name"], r["site_detail_url"], r["guid"], r, match
+                            ),
                         )
         return matches

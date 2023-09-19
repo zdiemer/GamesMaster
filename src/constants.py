@@ -1,3 +1,5 @@
+"""Constants for the ExcelParser project"""
+
 PLATFORM_NAMES = {
     "3do": ["3do interactive multiplayer"],
     "acorn electron": [],

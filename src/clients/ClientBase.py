@@ -6,14 +6,14 @@ import random
 import urllib.parse
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Callable, Coroutine, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Coroutine, Dict, List, Optional, Union
 
 from fake_headers import Headers
 
 from config import Config
 from excel_game import ExcelGame
 from game_match import GameMatch
-from match_validator import ValidationInfo
+from match_validator import MatchValidator
 
 
 class ResponseNotOkError(Exception):
@@ -136,37 +136,46 @@ class RateLimiter:
 
 
 class ClientBase:
-    _config: Config
-    _default_headers: Dict[str, str]
-    _spoof_headers: bool
-    _rate_limiter: RateLimiter
-    _next_headers: datetime
-    _cached_headers: Optional[dict]
-    _cached_responses: Dict[int, Union[Any, str]]
+    __SPOOF_HEADER_LIFETIME_MINUTES: int = 5
 
-    _SPOOF_HEADER_LIFETIME_MINUTES: int = 5
+    __cached_headers: Optional[dict]
+    __cached_responses: Dict[int, Union[Any, str]]
+    __default_headers: Dict[str, str]
+    __next_headers: datetime
+    __rate_limiter: RateLimiter
+    __spoof_headers: bool
+
+    _config: Config
+
+    validator: MatchValidator
 
     def __init__(
         self,
+        validator: MatchValidator,
         config: Config = None,
         limit: RateLimit = RateLimit(),
         spoof_headers: bool = False,
     ):
+        self.validator = validator
         self._config = config or Config.create()
-        self._default_headers = {"User-Agent": self._config.user_agent}
-        self._rate_limiter = RateLimiter(limit)
-        self._spoof_headers = spoof_headers
-        self._next_headers = datetime.utcnow()
-        self._cached_headers = None
-        self._cached_responses = {}
+        self.__default_headers = {"User-Agent": self._config.user_agent}
+        self.__rate_limiter = RateLimiter(limit)
+        self.__spoof_headers = spoof_headers
+        self.__next_headers = datetime.utcnow()
+        self.__cached_headers = None
+        self.__cached_responses = {}
 
     def _get_headers(self) -> dict:
-        if self._cached_headers is None or datetime.utcnow() > self._next_headers:
-            self._cached_headers = Headers().generate()
-            self._next_headers = datetime.utcnow() + timedelta(
-                minutes=self._SPOOF_HEADER_LIFETIME_MINUTES
+        if self.__cached_headers is None or datetime.utcnow() > self.__next_headers:
+            self.__cached_headers = Headers().generate()
+            print(
+                "Refreshing spoofed headers with User-Agent: "
+                f"{self.__cached_headers.get('User-Agent')}"
             )
-        return self._cached_headers
+            self.__next_headers = datetime.utcnow() + timedelta(
+                minutes=self.__SPOOF_HEADER_LIFETIME_MINUTES
+            )
+        return self.__cached_headers
 
     def _hash_request(
         self, url: str, params: Optional[Dict[str, Any]] = None, data: Any = None
@@ -192,14 +201,14 @@ class ClientBase:
     ) -> Union[Any, str]:
         req_hash = self._hash_request(url, params, data)
 
-        if req_hash in self._cached_responses:
+        if req_hash in self.__cached_responses:
             print(f"Serving {url} from cache")
-            return self._cached_responses[req_hash]
+            return self.__cached_responses[req_hash]
 
         if headers is None:
             headers = (
-                self._default_headers
-                if not self._spoof_headers
+                self.__default_headers
+                if not self.__spoof_headers
                 else self._get_headers()
             )
 
@@ -214,10 +223,10 @@ class ClientBase:
                         await backoff.backoff(res.url, res.status)
                         return await do_req()
                     res_val = await res.json() if json else await res.text()
-                    self._cached_responses[req_hash] = res_val
+                    self.__cached_responses[req_hash] = res_val
                     return res_val
 
-        return await self._rate_limiter.request(url, do_req)
+        return await self.__rate_limiter.request(url, do_req)
 
     async def get(
         self,
@@ -240,7 +249,5 @@ class ClientBase:
             "POST", url, params=params, headers=headers, data=data, json=json
         )
 
-    async def match_game(
-        self, game: ExcelGame
-    ) -> List[Tuple[GameMatch, ValidationInfo]]:
+    async def match_game(self, game: ExcelGame) -> List[GameMatch]:
         raise NotImplementedError

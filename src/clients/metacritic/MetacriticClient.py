@@ -1,31 +1,13 @@
 from __future__ import annotations
 
-import re
 import urllib.parse
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
-from clients.ClientBase import ClientBase, DatePart, RateLimit
+from clients import ClientBase, DatePart, RateLimit
 from config import Config
 from excel_game import ExcelGame, ExcelRegion
 from game_match import GameMatch
-from match_validator import MatchValidator, ValidationInfo
-
-
-class MetacriticGame:
-    title: str
-    platform: str
-    score: int
-    url: str
-    release_year: int
-
-    def __init__(
-        self, title: str, platform: str, score: int, url: str, release_year: int
-    ):
-        self.title = title
-        self.platform = platform
-        self.score = score
-        self.url = url
-        self.release_year = release_year
+from match_validator import MatchValidator
 
 
 class MetacriticClient(ClientBase):
@@ -36,9 +18,9 @@ class MetacriticClient(ClientBase):
     # From Metacritic's network request query parameters
     __api_key = "1MOZgmNFxvmljaQR1X9KAij9Mo4xAY3u"
 
-    def __init__(self, config: Config = None):
+    def __init__(self, validator: MatchValidator, config: Config = None):
         config = config or Config.create()
-        super().__init__(config, RateLimit(30, DatePart.MINUTE))
+        super().__init__(validator, config, RateLimit(30, DatePart.MINUTE))
 
     async def search(self, game: str, offset: int = 0, limit: int = 30) -> dict:
         return await self.get(
@@ -74,13 +56,11 @@ class MetacriticClient(ClientBase):
             )
         ).replace(" ", "-")
 
-    async def match_game(
-        self, game: ExcelGame
-    ) -> List[Tuple[GameMatch, ValidationInfo]]:
+    async def match_game(self, game: ExcelGame) -> List[GameMatch]:
         if game.release_region != ExcelRegion.NORTH_AMERICA:
             return []
 
-        matches: List[Tuple[GameMatch, ValidationInfo]] = []
+        matches: List[GameMatch] = []
         validator = MatchValidator()
 
         def get_results_from_component(
@@ -142,15 +122,13 @@ class MetacriticClient(ClientBase):
                     }
 
                     matches.append(
-                        (
-                            GameMatch(
-                                r["title"],
-                                f"{self.__BASE_METACRITIC_URL}{r['criticScoreSummary']['url']}",
-                                r["id"],
-                                metacritic_info,
-                            ),
+                        GameMatch(
+                            r["title"],
+                            f"{self.__BASE_METACRITIC_URL}{r['criticScoreSummary']['url']}",
+                            r["id"],
+                            metacritic_info,
                             match,
-                        )
+                        ),
                     )
 
         offset = 0

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
-from clients.ClientBase import ClientBase, DatePart, RateLimit
+from clients import ClientBase
 from config import Config
 from excel_game import ExcelGame, ExcelRegion
 from game_match import GameMatch
-from match_validator import MatchValidator, ValidationInfo
+from match_validator import MatchValidator
 
 
 class PriceChartingClient(ClientBase):
@@ -18,9 +18,9 @@ class PriceChartingClient(ClientBase):
 
     __api_key: str
 
-    def __init__(self, config: Config = None):
+    def __init__(self, validator: MatchValidator, config: Config = None):
         config = config or Config.create()
-        super().__init__(config)
+        super().__init__(validator, config)
         self.__api_key = config.price_charting_api_key
 
     async def _make_request(self, route: str, params: Dict[str, Any] = {}) -> Any:
@@ -59,15 +59,12 @@ class PriceChartingClient(ClientBase):
             ),
         )
 
-    async def match_game(
-        self, game: ExcelGame
-    ) -> List[Tuple[GameMatch, ValidationInfo]]:
+    async def match_game(self, game: ExcelGame) -> List[GameMatch]:
         if game.owned_format not in ("Both", "Physical"):
             return []
 
         results = await self.products(query=game.title)
-        matches: List[Tuple[GameMatch, ValidationInfo]] = []
-        validator = MatchValidator()
+        matches: List[GameMatch] = []
 
         if results["status"] != "success":
             return matches
@@ -123,30 +120,33 @@ class PriceChartingClient(ClientBase):
                         default_match = r
                 continue
 
-            match = validator.validate(
+            match = self.validator.validate(
                 game, self.__price_charting_normalization(r["product-name"]), [platform]
             )
             if match.matched:
                 matches.append(
-                    (GameMatch(r["product-name"], id=r["id"], match_info=r), match)
+                    GameMatch(
+                        r["product-name"],
+                        id=r["id"],
+                        match_info=r,
+                        validation_info=match,
+                    )
                 )
         if not any(matches) and default_match is not None:
             platform = str(default_match["console-name"]).lower()
             platform = re.sub(self.__REGION_REGEX, "", platform)
-            match = validator.validate(
+            match = self.validator.validate(
                 game,
                 self.__price_charting_normalization(default_match["product-name"]),
                 [platform],
             )
             if match.matched:
                 matches.append(
-                    (
-                        GameMatch(
-                            default_match["product-name"],
-                            id=default_match["id"],
-                            match_info=default_match,
-                        ),
-                        match,
+                    GameMatch(
+                        default_match["product-name"],
+                        id=default_match["id"],
+                        match_info=default_match,
+                        validation_info=match,
                     )
                 )
         return matches

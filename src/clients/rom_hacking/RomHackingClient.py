@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Literal, Tuple
+from typing import Dict, List, Literal
 
 from bs4 import BeautifulSoup
 
-from clients.ClientBase import ClientBase, DatePart, RateLimit
+from clients import ClientBase
 from config import Config
 from excel_game import ExcelGame, ExcelRegion
 from game_match import GameMatch
-from match_validator import MatchValidator, ValidationInfo
+from match_validator import MatchValidator
 
 
 class Category(Enum):
@@ -140,9 +140,9 @@ class RomHackingClient(ClientBase):
         "xbox 360": Platform.XBOX_360,
     }
 
-    def __init__(self, config: Config = None):
+    def __init__(self, validator: MatchValidator, config: Config = None):
         config = config or Config.create()
-        super().__init__(config)
+        super().__init__(validator, config)
 
     async def _make_request(self, route: str, params: Dict) -> str:
         return await self.get(
@@ -173,9 +173,7 @@ class RomHackingClient(ClientBase):
 
         return await self._make_request("", params)
 
-    async def match_game(
-        self, game: ExcelGame
-    ) -> List[Tuple[GameMatch, ValidationInfo]]:
+    async def match_game(self, game: ExcelGame) -> List[GameMatch]:
         if (
             game.release_region in (ExcelRegion.NORTH_AMERICA, ExcelRegion.EUROPE)
             or not game.platform.lower() in self.__PLATFORM_ID_MAPPINGS
@@ -188,8 +186,7 @@ class RomHackingClient(ClientBase):
 
         soup = BeautifulSoup(text, "html.parser")
         results = soup.find_all("tr", {"class": "even", "class": "odd"})
-        matches: List[Tuple[GameMatch, ValidationInfo]] = []
-        validator = MatchValidator()
+        matches: List[GameMatch] = []
 
         for r in results:
             title = r.find("td", {"class": "col_1"})
@@ -218,12 +215,9 @@ class RomHackingClient(ClientBase):
                 "translation_release": translation_release,
             }
 
-            if validator.titles_equal_fuzzy(name, game.title):
+            if self.validator.titles_equal_fuzzy(name, game.title):
                 matches.append(
-                    (
-                        GameMatch(rh_info["name"], rh_info["url"], match_info=rh_info),
-                        None,
-                    )
+                    GameMatch(rh_info["name"], rh_info["url"], match_info=rh_info)
                 )
 
         return matches
