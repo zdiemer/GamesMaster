@@ -14,6 +14,7 @@ class ExcelRegion(Enum):
     """Release regions for games"""
 
     ASIA = "AS"
+    BRAZIL = "BR"
     GERMANY = "DE"
     EUROPE = "EU"
     FRANCE = "FR"
