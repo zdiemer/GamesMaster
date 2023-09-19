@@ -24,3 +24,11 @@ $ touch static/config.json
     "itchioApiKey": "..."
 }
 ```
+
+## Django commands ran
+
+Initialization:
+
+```sh
+$ django-admin startproject game_manager
+```
