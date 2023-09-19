@@ -13,6 +13,7 @@ class ExcelRegion(Enum):
 
 
 class ExcelGame:
+    id: int
     title: str
     platform: str
     release_date: pd.DatetimeIndex
@@ -26,6 +27,7 @@ class ExcelGame:
 
     def __init__(
         self,
+        id: int,
         title: str,
         platform: str,
         release_date: pd.DatetimeIndex,
@@ -37,6 +39,7 @@ class ExcelGame:
         notes: str,
         owned_format: str,
     ):
+        self.id = id
         self.title = title
         self.platform = platform
         self.release_date = release_date

@@ -3,9 +3,10 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Tuple
 
-from clients.ClientBase import ClientBase
+from clients.ClientBase import ClientBase, DatePart, RateLimit
 from config import Config
 from excel_game import ExcelGame, ExcelRegion
+from game_match import GameMatch
 from match_validator import MatchValidator, ValidationInfo
 
 
@@ -58,12 +59,14 @@ class PriceChartingClient(ClientBase):
             ),
         )
 
-    async def match_game(self, game: ExcelGame) -> List[Tuple[Any, ValidationInfo]]:
+    async def match_game(
+        self, game: ExcelGame
+    ) -> List[Tuple[GameMatch, ValidationInfo]]:
         if game.owned_format not in ("Both", "Physical"):
             return []
 
         results = await self.products(query=game.title)
-        matches: List[Tuple[Any, ValidationInfo]] = []
+        matches: List[Tuple[GameMatch, ValidationInfo]] = []
         validator = MatchValidator()
 
         if results["status"] != "success":
@@ -124,7 +127,9 @@ class PriceChartingClient(ClientBase):
                 game, self.__price_charting_normalization(r["product-name"]), [platform]
             )
             if match.matched:
-                matches.append((r, match))
+                matches.append(
+                    (GameMatch(r["product-name"], id=r["id"], match_info=r), match)
+                )
         if not any(matches) and default_match is not None:
             platform = str(default_match["console-name"]).lower()
             platform = re.sub(self.__REGION_REGEX, "", platform)
@@ -134,5 +139,14 @@ class PriceChartingClient(ClientBase):
                 [platform],
             )
             if match.matched:
-                matches.append((default_match, match))
+                matches.append(
+                    (
+                        GameMatch(
+                            default_match["product-name"],
+                            id=default_match["id"],
+                            match_info=default_match,
+                        ),
+                        match,
+                    )
+                )
         return matches

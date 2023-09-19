@@ -3,32 +3,30 @@ from __future__ import annotations
 import asyncio
 import unicodedata
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Tuple
+from typing import Dict, List, Tuple
 
-from clients.ClientBase import ClientBase
+from clients.ClientBase import ClientBase, DatePart, RateLimit
 from config import Config
 from excel_game import ExcelGame
+from game_match import GameMatch
 from match_validator import MatchValidator, ValidationInfo
 
 
 class IgdbClient(ClientBase):
     __BASE_TWITCH_AUTH_URL = "https://id.twitch.tv/oauth2/token?"
     __BASE_IGDB_URL = "https://api.igdb.com/v4"
-    __MAX_REQUESTS_PER_SECOND = 4
 
     __access_token: str
     __auth_expiration: datetime
     __client_id: str
     __client_secret: str
     __platforms: List[Dict]
-    __requests_per_second: Dict[int, int]
 
     def __init__(self, config: Config = None):
         config = config or Config.create()
-        super().__init__(config)
+        super().__init__(config, RateLimit(4, DatePart.SECOND))
         self.__client_id = config.igdb_client_id
         self.__client_secret = config.igdb_client_secret
-        self.__requests_per_second = {}
         self.__platforms = {}
         self.__auth_expiration = datetime.utcnow() - timedelta(seconds=30)
 
@@ -47,16 +45,6 @@ class IgdbClient(ClientBase):
         )
 
     async def _make_request(self, route: str, data: str):
-        cur_sec = datetime.utcnow().second
-        if self.__requests_per_second.get(cur_sec) == self.__MAX_REQUESTS_PER_SECOND:
-            await asyncio.sleep(1)
-            self.__requests_per_second.clear()
-        elif self.__requests_per_second.get(cur_sec) == 0:
-            self.__requests_per_second.clear()
-        self.__requests_per_second[cur_sec] = (
-            self.__requests_per_second.get(cur_sec) or 0
-        ) + 1
-
         if datetime.utcnow() > self.__auth_expiration:
             await self._authorize()
 
@@ -68,6 +56,7 @@ class IgdbClient(ClientBase):
         if self.__access_token is None:
             raise RuntimeError
         return {
+            "User-Agent": self._config.user_agent,
             "Client-ID": self.__client_id,
             "Authorization": f"Bearer {self.__access_token}",
         }
@@ -89,7 +78,9 @@ class IgdbClient(ClientBase):
     async def release_dates(self, data: str):
         return await self._make_request("release_dates/", data)
 
-    async def match_game(self, game: ExcelGame) -> List[Tuple[Any, ValidationInfo]]:
+    async def match_game(
+        self, game: ExcelGame
+    ) -> List[Tuple[GameMatch, ValidationInfo]]:
         if not any(self.__platforms):
             await self._init_platforms()
 
@@ -99,7 +90,7 @@ class IgdbClient(ClientBase):
         )
 
         results = await self.games(search_data)
-        matches: List[Tuple[Any, ValidationInfo]] = []
+        matches: List[Tuple[GameMatch, ValidationInfo]] = []
         validator = MatchValidator()
 
         for r in results:
@@ -129,7 +120,7 @@ class IgdbClient(ClientBase):
             )
 
             if match.matched:
-                matches.append((r, match))
+                matches.append((GameMatch(r["name"], r["url"], r["id"], r), match))
             elif r.get("alternative_names") is not None:
                 for alt in r["alternative_names"]:
                     names = await self.alternative_names(
@@ -144,6 +135,8 @@ class IgdbClient(ClientBase):
                     )
 
                     if match.matched:
-                        matches.append((r, match))
+                        matches.append(
+                            (GameMatch(r["name"], r["url"], r["id"], r), match)
+                        )
 
         return matches

@@ -6,9 +6,10 @@ from typing import Any, Dict, List, Literal, Tuple
 
 from bs4 import BeautifulSoup
 
-from clients.ClientBase import ClientBase
+from clients.ClientBase import ClientBase, DatePart, RateLimit
 from config import Config
 from excel_game import ExcelGame, ExcelRegion
+from game_match import GameMatch
 from match_validator import MatchValidator, ValidationInfo
 
 
@@ -172,7 +173,9 @@ class RomHackingClient(ClientBase):
 
         return await self._make_request("", params)
 
-    async def match_game(self, game: ExcelGame) -> List[Tuple[Any, ValidationInfo]]:
+    async def match_game(
+        self, game: ExcelGame
+    ) -> List[Tuple[GameMatch, ValidationInfo]]:
         if (
             game.release_region in (ExcelRegion.NORTH_AMERICA, ExcelRegion.EUROPE)
             or not game.platform.lower() in self.__PLATFORM_ID_MAPPINGS
@@ -185,7 +188,7 @@ class RomHackingClient(ClientBase):
 
         soup = BeautifulSoup(text, "html.parser")
         results = soup.find_all("tr", {"class": "even", "class": "odd"})
-        matches: List[Tuple[Any, ValidationInfo]] = []
+        matches: List[Tuple[GameMatch, ValidationInfo]] = []
         validator = MatchValidator()
 
         for r in results:
@@ -204,18 +207,23 @@ class RomHackingClient(ClientBase):
                 r.find("td", {"class": "col_7"}).text.strip(), "%d %b %Y"
             )
 
+            rh_info = {
+                "name": name,
+                "url": f"{self.__BASE_ROM_HACKING_URL}{url}",
+                "released_by_name": released_by_name,
+                "released_by_url": f"{self.__BASE_ROM_HACKING_URL}{released_by_url}",
+                "genre": genre,
+                "category": category,
+                "version": version,
+                "translation_release": translation_release,
+            }
+
             if validator.titles_equal_fuzzy(name, game.title):
                 matches.append(
-                    {
-                        "name": name,
-                        "url": f"{self.__BASE_ROM_HACKING_URL}{url}",
-                        "released_by_name": released_by_name,
-                        "released_by_url": f"{self.__BASE_ROM_HACKING_URL}{released_by_url}",
-                        "genre": genre,
-                        "category": category,
-                        "version": version,
-                        "translation_release": translation_release,
-                    }
+                    (
+                        GameMatch(rh_info["name"], rh_info["url"], match_info=rh_info),
+                        None,
+                    )
                 )
 
         return matches

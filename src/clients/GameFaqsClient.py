@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-import aiohttp
 import re
-import urllib.parse
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Tuple
+from typing import Dict, List, Tuple
 
 from bs4 import BeautifulSoup
 
+from clients.ClientBase import ClientBase, DatePart, RateLimit
+from config import Config
 from excel_game import ExcelGame
+from game_match import GameMatch
 from match_validator import MatchValidator, ValidationInfo
 
 
@@ -18,6 +19,12 @@ class GameFaqsPlatform:
 
     def __init__(self, name: str):
         self.name = name
+
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
 
 class GameFaqsGenre:
@@ -28,12 +35,24 @@ class GameFaqsGenre:
         self.name = name
         self.parent_genre = parent_genre
 
+    def __str__(self) -> str:
+        return str({"name": self.name, "parent_genre": self.parent_genre})
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
 
 class GameFaqsCompany:
     name: str
 
     def __init__(self, name: str):
         self.name = name
+
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
 
 class GameFaqsRegion(Enum):
@@ -64,8 +83,24 @@ class GameFaqsRelease:
     title: str = None
     status: GameFaqsReleaseStatus = GameFaqsReleaseStatus.RELEASED
 
-    def __init__(self):
-        pass
+    def __str__(self) -> str:
+        return str(
+            {
+                "release_day": self.release_day,
+                "release_month": self.release_month,
+                "release_year": self.release_year,
+                "release_region": self.release_region.value,
+                "publisher": self.publisher,
+                "product_id": self.product_id,
+                "distribution_or_barcode": self.distribution_or_barcode,
+                "age_rating": self.age_rating,
+                "title": self.title,
+                "status": self.status.name.title(),
+            }
+        )
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
 
 class GameFaqsFranchise:
@@ -74,9 +109,17 @@ class GameFaqsFranchise:
     def __init__(self, name: str):
         self.name = name
 
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
 
 class GameFaqsGame:
+    id: int = None
     title: str = None
+    url: str = None
     platform: GameFaqsPlatform = None
     genre: GameFaqsGenre = None
     releases: List[GameFaqsRelease] = None
@@ -89,16 +132,31 @@ class GameFaqsGame:
     user_length_hours: float = None
     user_length_hours_count: int = None
 
-    def __init__(self):
-        pass
+    def __str__(self) -> str:
+        return str(
+            {
+                "id": self.id,
+                "title": self.title,
+                "url": self.url,
+                "platform": self.platform,
+                "releases": self.releases,
+                "developer": self.developer,
+                "franchises": self.franchises,
+                "user_rating": self.user_rating,
+                "user_rating_count": self.user_rating_count,
+                "user_difficulty": self.user_difficulty,
+                "user_difficulty_count": self.user_difficulty_count,
+                "user_length_hours": self.user_length_hours,
+                "user_length_hours_count": self.user_length_hours_count,
+            }
+        )
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
 
-class GameFaqsClient:
+class GameFaqsClient(ClientBase):
     __BASE_GAMEFAQS_URL = "https://gamefaqs.gamespot.com"
-    __GF_HEADERS = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
-    }
-
     __PLATFORM_TO_URL_PART = {
         "3do": "3do",
         "amstrad cpc": "cpc",
@@ -199,23 +257,15 @@ class GameFaqsClient:
         "ios": "iphone",
     }
 
-    def __init__(self):
-        pass
-
-    @staticmethod
-    def create() -> GameFaqsClient:
-        return GameFaqsClient()
+    def __init__(self, config: Config = None):
+        config = config or Config.create()
+        super().__init__(config, RateLimit(2, DatePart.MINUTE), spoof_headers=True)
 
     async def _make_request(
         self, route: str, params: Dict = None, as_json: bool = True
     ):
-        params_string = (
-            f"?{urllib.parse.urlencode(params)}" if params is not None else ""
-        )
-        url = f"{self.__BASE_GAMEFAQS_URL}/{route}{params_string}"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=self.__GF_HEADERS) as res:
-                return await res.json() if as_json else await res.text()
+        url = f"{self.__BASE_GAMEFAQS_URL}/{route}"
+        return await self.get(url, params=params, json=as_json)
 
     async def home_game_search(self, term: str):
         return await self._make_request("ajax/home_game_search", {"term": term})
@@ -226,19 +276,9 @@ class GameFaqsClient:
     async def release_data_page(self, url: str):
         return await self._make_request(f"{url}/data", as_json=False)
 
-    async def get_game_metadata(self, game: ExcelGame):
-        matches = await self.match_game(game)
-
-        if len(matches) > 1:
-            print(
-                f'More than one result for {game.title}: {",".join(self.__BASE_GAMEFAQS_URL + matches["url"])}'
-            )
-            return None
-        elif not any(matches):
-            return None
-
-        url = matches[0]["board_url"].replace(
-            "boards", self.__PLATFORM_TO_URL_PART[game.platform.lower()]
+    async def get_gamefaqs_game(self, match: Dict, platform: str) -> GameFaqsGame:
+        url = match["board_url"].replace(
+            "boards", self.__PLATFORM_TO_URL_PART[platform.lower()]
         )[1:]
 
         html_doc = await self.game_page(url)
@@ -248,6 +288,8 @@ class GameFaqsClient:
         infos = game_info.find_all("div", {"class": "content"})
 
         gf_game = GameFaqsGame()
+        gf_game.id = int(match["game_id"])
+        gf_game.url = f"{self.__BASE_GAMEFAQS_URL}{url}"
         gf_game.title = soup.find("h1", {"class": "page-title"}).text.strip()
 
         for i in infos:
@@ -268,35 +310,41 @@ class GameFaqsClient:
             elif label in ["Developer:", "Developer/Publisher:"]:
                 gf_game.developer = GameFaqsCompany(i.a.text.strip())
 
-        empty_title = "Average: 0 stars from  users"
-        rating_elem = soup.find(id="gs_rate_avg").parent
-        if rating_elem["title"] != empty_title:
-            results = re.search(
-                r"(?P<rating>[0-9]+(\.[0-9]+)*) stars* from (?P<count>[0-9]+) users",
-                rating_elem["title"],
-            )
-            gf_game.user_rating = float(results.group("rating"))
-            gf_game.user_rating_count = int(results.group("count"))
+        rating_child = soup.find(id="gs_rate_avg")
+        if rating_child is not None:
+            empty_title = "Average: 0 stars from  users"
+            rating_elem = rating_child.parent
+            if rating_elem["title"] != empty_title:
+                results = re.search(
+                    r"(?P<rating>[0-9]+(\.[0-9]+)*) stars* from (?P<count>[0-9]+) users",
+                    rating_elem["title"],
+                )
+                gf_game.user_rating = float(results.group("rating"))
+                gf_game.user_rating_count = int(results.group("count"))
 
-        empty_title = "Average: 0 hearts from  users"
-        difficulty_elem = soup.find(id="gs_difficulty_avg").parent
-        if difficulty_elem["title"] != empty_title:
-            results = re.search(
-                r"(?P<rating>[0-9]+(\.[0-9]+)*) hearts* from (?P<count>[0-9]+) users",
-                difficulty_elem["title"],
-            )
-            gf_game.user_difficulty = float(results.group("rating"))
-            gf_game.user_difficulty_count = int(results.group("count"))
+        difficulty_child = soup.find(id="gs_difficulty_avg")
+        if difficulty_child is not None:
+            difficulty_elem = difficulty_child.parent
+            empty_title = "Average: 0 hearts from  users"
+            if difficulty_elem["title"] != empty_title:
+                results = re.search(
+                    r"(?P<rating>[0-9]+(\.[0-9]+)*) hearts* from (?P<count>[0-9]+) users",
+                    difficulty_elem["title"],
+                )
+                gf_game.user_difficulty = float(results.group("rating"))
+                gf_game.user_difficulty_count = int(results.group("count"))
 
-        empty_title = "Average: 0 hours from  users"
-        length_elem = soup.find(id="gs_length_avg_hint").parent
-        if length_elem["title"] != empty_title:
-            results = re.search(
-                r"(?P<rating>[0-9]+(\.[0-9]+)*) hours* from (?P<count>[0-9]+) users",
-                length_elem["title"],
-            )
-            gf_game.user_length_hours = float(results.group("rating"))
-            gf_game.user_length_hours_count = int(results.group("count"))
+        length_child = soup.find(id="gs_length_avg_hint")
+        if length_child is not None:
+            length_elem = length_child.parent
+            empty_title = "Average: 0 hours from  users"
+            if length_elem["title"] != empty_title:
+                results = re.search(
+                    r"(?P<rating>[0-9]+(\.[0-9]+)*) hours* from (?P<count>[0-9]+) users",
+                    length_elem["title"],
+                )
+                gf_game.user_length_hours = float(results.group("rating"))
+                gf_game.user_length_hours_count = int(results.group("count"))
 
         html_doc = await self.release_data_page(url)
         soup = BeautifulSoup(html_doc, "html.parser")
@@ -346,9 +394,11 @@ class GameFaqsClient:
 
         return gf_game
 
-    async def match_game(self, game: ExcelGame) -> List[Tuple[Any, ValidationInfo]]:
+    async def match_game(
+        self, game: ExcelGame
+    ) -> List[Tuple[GameMatch, ValidationInfo]]:
         results = await self.home_game_search(game.title)
-        matches: List[Tuple[Any, ValidationInfo]] = []
+        matches: List[Tuple[GameMatch, ValidationInfo]] = []
         validator = MatchValidator()
 
         for r in results:
@@ -357,6 +407,26 @@ class GameFaqsClient:
             if r.get("game_name") and r.get("plats"):
                 match = validator.validate(game, r["game_name"], r["plats"].split(", "))
                 if match.matched:
-                    matches.append((r, match))
+                    gf_game = await self.get_gamefaqs_game(r, game.platform)
+                    if validator.verify_release_year(
+                        game.release_date.year,
+                        [
+                            rel.release_year
+                            for rel in filter(
+                                # Filter unreleased games
+                                lambda _rel: _rel.status
+                                == GameFaqsReleaseStatus.RELEASED,
+                                gf_game.releases,
+                            )
+                        ],
+                    ):
+                        matches.append(
+                            (
+                                GameMatch(
+                                    gf_game.title, gf_game.url, gf_game.id, gf_game
+                                ),
+                                match,
+                            )
+                        )
 
         return matches

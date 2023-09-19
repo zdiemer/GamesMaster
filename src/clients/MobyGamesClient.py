@@ -3,11 +3,12 @@ from __future__ import annotations
 import asyncio
 import html
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Literal, NamedTuple, Tuple
+from typing import Dict, List, Literal, NamedTuple, Tuple
 
-from clients.ClientBase import ClientBase
+from clients.ClientBase import ClientBase, DatePart, RateLimit
 from config import Config
 from excel_game import ExcelGame
+from game_match import GameMatch
 from match_validator import MatchValidator, ValidationInfo
 
 
@@ -251,31 +252,14 @@ class Game:
 
 class MobyGamesClient(ClientBase):
     __BASE_MOBYGAMES_SEARCH_URL = "https://api.mobygames.com/v1"
-
     __api_key: str
-    __next_call: datetime
 
     def __init__(self, config: Config = None):
         config = config or Config.create()
-        super().__init__(config)
+        super().__init__(config, RateLimit(360, DatePart.HOUR))
         self.__api_key = self._config.moby_games_api_key
-        self.__next_call = datetime.utcnow()
-
-    @staticmethod
-    async def create(config: Config = None) -> MobyGamesClient:
-        if config is None:
-            config = Config.create()
-
-        return MobyGamesClient(config.moby_games_api_key)
 
     async def _make_request(self, route: str, params: Dict = {}) -> any:
-        if self.__next_call > datetime.utcnow():
-            delta = self.__next_call - datetime.utcnow()
-            sleep_time_seconds = delta.seconds + (delta.microseconds / 1_000_000.0)
-            await asyncio.sleep(sleep_time_seconds)
-
-        self.__next_call = datetime.utcnow() + timedelta(seconds=10)
-
         if params.get("api_key") is None:
             params["api_key"] = self.__api_key
 
@@ -400,9 +384,11 @@ class MobyGamesClient(ClientBase):
         except KeyError:
             raise
 
-    async def match_game(self, game: ExcelGame) -> List[Tuple[Any, ValidationInfo]]:
+    async def match_game(
+        self, game: ExcelGame
+    ) -> List[Tuple[GameMatch, ValidationInfo]]:
         results = await self.games(title=game.title)
-        matches: List[Tuple[Any, ValidationInfo]] = []
+        matches: List[Tuple[GameMatch, ValidationInfo]] = []
         validator = MatchValidator()
 
         async def get_years(game_id: int, platform_id: int):
@@ -433,7 +419,7 @@ class MobyGamesClient(ClientBase):
                 if MatchValidator.verify_release_year(
                     game.release_date.year, await get_years(g.id, pid)
                 ):
-                    matches.append((g, match))
+                    matches.append((GameMatch(g.title, g.moby_url, g.id, g), match))
             elif g.alternate_titles is not None:
                 if any(
                     match.matched
@@ -445,8 +431,6 @@ class MobyGamesClient(ClientBase):
                     if MatchValidator.verify_release_year(
                         game.release_date.year, await get_years(g.id, pid)
                     ):
-                        matches.append((g, match))
-        if not any(matches):
-            print(results)
+                        matches.append((GameMatch(g.title, g.moby_url, g.id, g), match))
 
         return matches

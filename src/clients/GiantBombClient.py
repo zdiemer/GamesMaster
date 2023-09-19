@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import urllib.parse
 from datetime import datetime
 from typing import Any, Dict, List, Tuple
 
-from clients.ClientBase import ClientBase
+from clients.ClientBase import ClientBase, DatePart, RateLimit
 from config import Config
 from excel_game import ExcelGame
+from game_match import GameMatch
 from match_validator import MatchValidator, ValidationInfo
 
 
@@ -16,7 +18,15 @@ class GiantBombClient(ClientBase):
 
     def __init__(self, config: Config = None):
         config = config or Config.create()
-        super().__init__(config)
+        super().__init__(
+            config,
+            RateLimit(
+                200,
+                DatePart.HOUR,
+                rate_limit_per_route=True,
+                get_route_path=lambda s: urllib.parse.urlparse(s).path.split("/")[2],
+            ),
+        )
         self.__api_key = self._config.giant_bomb_api_key
 
     async def _make_request(
@@ -84,9 +94,11 @@ class GiantBombClient(ClientBase):
 
         return years
 
-    async def match_game(self, game: ExcelGame) -> List[Tuple[Any, ValidationInfo]]:
+    async def match_game(
+        self, game: ExcelGame
+    ) -> List[Tuple[GameMatch, ValidationInfo]]:
         results = await self.search(game.title)
-        matches: List[Tuple[Any, ValidationInfo]] = []
+        matches: List[Tuple[GameMatch, ValidationInfo]] = []
         validator = MatchValidator()
 
         async def get_years(guid: str):
@@ -101,7 +113,12 @@ class GiantBombClient(ClientBase):
                 if MatchValidator.verify_release_year(
                     game.release_date.year, await get_years(r["guid"])
                 ):
-                    matches.append((r, match))
+                    matches.append(
+                        (
+                            GameMatch(r["name"], r["site_detail_url"], r["guid"], r),
+                            match,
+                        )
+                    )
             elif r.get("aliases") is not None:
                 if any(
                     match.matched
@@ -113,5 +130,12 @@ class GiantBombClient(ClientBase):
                     if MatchValidator.verify_release_year(
                         game.release_date.year, await get_years(r["guid"])
                     ):
-                        matches.append((r, match))
+                        matches.append(
+                            (
+                                GameMatch(
+                                    r["name"], r["site_detail_url"], r["guid"], r
+                                ),
+                                match,
+                            )
+                        )
         return matches

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import re
-from typing import Any, List, Tuple
+import urllib.parse
+from typing import Dict, List, Optional, Tuple
 
-from bs4 import BeautifulSoup
-
-from clients.ClientBase import ClientBase
+from clients.ClientBase import ClientBase, DatePart, RateLimit
 from config import Config
-from excel_game import ExcelGame, ExcelRegion as Region
+from excel_game import ExcelGame, ExcelRegion
+from game_match import GameMatch
 from match_validator import MatchValidator, ValidationInfo
 
 
@@ -29,81 +29,153 @@ class MetacriticGame:
 
 
 class MetacriticClient(ClientBase):
+    __BASE_FANDOM_METACRITIC_URL = (
+        "https://fandom-prod.apigee.net/v1/xapi/composer/metacritic/pages"
+    )
     __BASE_METACRITIC_URL = "https://www.metacritic.com"
-    __METACRITIC_HEADERS = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
-    }
+    # From Metacritic's network request query parameters
+    __api_key = "1MOZgmNFxvmljaQR1X9KAij9Mo4xAY3u"
 
     def __init__(self, config: Config = None):
         config = config or Config.create()
-        super().__init__(config)
+        super().__init__(config, RateLimit(30, DatePart.MINUTE))
 
-    async def _search(self, term: str):
-        payload = {"search_term": term, "search_filter": "game"}
-
-        return await self.post(
-            f"{self.__BASE_METACRITIC_URL}/search",
-            headers=self.__METACRITIC_HEADERS,
-            data=payload,
-            json=False,
+    async def search(self, game: str, offset: int = 0, limit: int = 30) -> dict:
+        return await self.get(
+            f"{self.__BASE_FANDOM_METACRITIC_URL}/search/{urllib.parse.quote(game)}/web",
+            params={
+                "apiKey": self.__api_key,
+                "offset": offset,
+                "limit": limit,
+                "mcoTypeId": 13,
+                "componentName": "search-tabs",
+                "componentDisplayName": "Search+Page+Tab+Filters",
+                "componentType": "FilterConfig",
+            },
         )
+
+    async def critic_reviews(self, game_slug: str, platform_slug: str) -> dict:
+        return await self.get(
+            f"{self.__BASE_FANDOM_METACRITIC_URL}/games-critic-reviews/{game_slug}/platform/{platform_slug}/web",
+            params={"filter": "all", "sort": "score", "apiKey": self.__api_key},
+        )
+
+    async def user_reviews(self, game_slug: str, platform_slug: str) -> dict:
+        return await self.get(
+            f"{self.__BASE_FANDOM_METACRITIC_URL}/games-user-reviews/{game_slug}/platform/{platform_slug}/web",
+            params={"filter": "all", "sort": "date", "apiKey": self.__api_key},
+        )
+
+    def _sluggify(self, s: str) -> str:
+        return "".join(
+            filter(
+                lambda _s: str.isalnum(_s) or str.isspace(_s),
+                s.lower(),
+            )
+        ).replace(" ", "-")
 
     async def match_game(
         self, game: ExcelGame
-    ) -> List[Tuple[MetacriticGame, ValidationInfo]]:
-        if game.release_region != Region.NORTH_AMERICA:
+    ) -> List[Tuple[GameMatch, ValidationInfo]]:
+        if game.release_region != ExcelRegion.NORTH_AMERICA:
             return []
 
-        text = await self._search(game.title)
-        soup = BeautifulSoup(text, "html.parser")
-        results = soup.find_all("div", {"class": "main_stats"})
-
-        page = 0
-        next_page = soup.find("span", {"class": "flipper next"})
-
-        while next_page is not None and next_page.a is not None:
-            page += 1
-            res = await self.get(
-                f"{self.__BASE_METACRITIC_URL}{next_page.a['href']}",
-                headers=self.__METACRITIC_HEADERS,
-                json=False,
-            )
-            soup = BeautifulSoup(res, "html.parser")
-            results.extend(soup.find_all("div", {"class": "main_stats"}))
-            next_page = soup.find("span", {"class": "flipper next"})
-
-        matches: List[Tuple[MetacriticGame, ValidationInfo]] = []
+        matches: List[Tuple[GameMatch, ValidationInfo]] = []
         validator = MatchValidator()
 
-        for r in results:
-            title = r.h3.a.text.strip()
-            platform = r.p.span.text.strip()
-            score = r.span.text.strip()
-            url = r.h3.a["href"]
+        def get_results_from_component(
+            res: dict, component_name: str = "search"
+        ) -> Optional[dict]:
+            components: List[Dict] = res.get("components")
 
-            if score == "tbd":
-                continue
+            res_comp: Optional[dict] = next(
+                (c for c in components if c["meta"]["componentName"] == component_name),
+                None,
+            )
 
-            year_match = re.search(r"Game, (?P<year>[0-9]{4})", r.p.getText())
+            if res_comp is None or res_comp.get("data") is None:
+                return None
 
-            if year_match is None:
-                continue
+            return res_comp
 
-            year = int(year_match.group("year"))
-
-            match = validator.validate(game, title, [platform], [year])
-            if match.matched:
-                matches.append(
+        async def get_matches_from_search_results(search_items: list):
+            for r in search_items:
+                platform = next(
                     (
-                        MetacriticGame(
-                            title,
-                            platform,
-                            int(score),
-                            f"{self.__BASE_METACRITIC_URL}{url}",
-                            year,
-                        ),
-                        match,
+                        p["name"]
+                        for p in r["platforms"]
+                        if validator.verify_platform(game.platform, [p["name"]])
                     ),
+                    None,
                 )
+
+                if platform is None:
+                    continue
+                match = validator.validate(game, r["title"], [platform])
+                if match.matched:
+                    resp = await self.critic_reviews(
+                        r["slug"], self._sluggify(platform)
+                    )
+
+                    critic_reviews = get_results_from_component(resp, "product")
+                    p_score: dict = next(
+                        (
+                            p["criticScoreSummary"]
+                            for p in critic_reviews["data"]["item"]["platforms"]
+                            if p["name"] == platform
+                        ),
+                        None,
+                    )
+
+                    if p_score is None or p_score.get("score") is None:
+                        continue
+
+                    resp = await self.user_reviews(r["slug"], self._sluggify(platform))
+                    user_reviews = get_results_from_component(
+                        resp, "user-score-summary"
+                    )
+                    u_score = user_reviews["data"]["item"]
+
+                    metacritic_info = {
+                        "critics": p_score,
+                        "users": u_score,
+                    }
+
+                    matches.append(
+                        (
+                            GameMatch(
+                                r["title"],
+                                f"{self.__BASE_METACRITIC_URL}{r['criticScoreSummary']['url']}",
+                                r["id"],
+                                metacritic_info,
+                            ),
+                            match,
+                        )
+                    )
+
+        offset = 0
+        page_size = 30
+
+        resp = await self.search(game.title)
+
+        results = get_results_from_component(resp)
+
+        if results is None or results["data"].get("items") is None:
+            return []
+
+        await get_matches_from_search_results(results["data"]["items"])
+
+        while not any(matches) and results["data"]["totalResults"] > offset + page_size:
+            offset += page_size
+            resp = await self.search(game.title, offset=offset)
+
+            if (
+                resp is None
+                or resp.get("data") is None
+                or resp["data"].get("items") is None
+            ):
+                break
+
+            await get_matches_from_search_results(results["data"]["items"])
 
         return matches

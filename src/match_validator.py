@@ -32,10 +32,14 @@ class MatchValidator:
 
         return (
             self.titles_equal_normalized(t1_fuzzy, t2_fuzzy)
-            or edit_distance.SequenceMatcher(
-                a=self.normalize(t1), b=self.normalize(t2)
-            ).distance()
-            <= 2
+            or (
+                edit_distance.SequenceMatcher(
+                    a=self.normalize(t1), b=self.normalize(t2)
+                ).distance()
+                <= 2
+                and not str.isdigit(t1[-1])
+                and not str.isdigit(t2[-1])
+            )
             or self.pokemon_special_case(t1, t2)
         )
 
