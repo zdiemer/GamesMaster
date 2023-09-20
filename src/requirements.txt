@@ -6,3 +6,4 @@ edit-distance
 openpyxl
 roman
 fake-headers
+jsonpickle
