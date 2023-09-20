@@ -1,7 +1,10 @@
 from django.http import HttpResponse, JsonResponse
 from django.core import serializers
+from django.contrib.auth.models import User, Group
+from rest_framework import viewsets, permissions, status, generics
 
-from .models import Game, Release, Platform, Genre, NotableDeveloper, Purchase
+from .serializers import GenreSerializer, CompanySerializer, ModeSerializer, PlatformSerializer, GameSerializer, ReleaseSerializer
+from .models import Game, Release, Platform, Genre, NotableDeveloper, Purchase, Company, Mode
 
 def healthcheck(request):
     return HttpResponse("ok")
@@ -67,3 +70,48 @@ def index(request):
 
 
     return HttpResponse(res)
+
+
+class ReleaseList(generics.ListCreateAPIView):
+    queryset = Release.objects.all()
+    serializer_class = ReleaseSerializer
+
+class CompanyList(generics.ListCreateAPIView):
+    queryset = Company.objects.all()
+    serializer_class = CompanySerializer
+
+
+class GenreList(generics.ListCreateAPIView):
+    queryset = Genre.objects.all()
+    serializer_class = GenreSerializer
+
+
+class ModeList(generics.ListCreateAPIView):
+    queryset = Mode.objects.all()
+    serializer_class = ModeSerializer
+
+
+class PlatformList(generics.ListCreateAPIView):
+    queryset = Platform.objects.all()
+    serializer_class = PlatformSerializer
+
+
+class GameList(generics.ListCreateAPIView):
+    queryset = Game.objects.all()
+    serializer_class = GameSerializer
+
+
+class GameDetailList(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Game.objects.all()
+    serializer_class = GameSerializer
+
+
+class GameRelease(viewsets.ModelViewSet):
+    queryset = Release.objects.all()
+    serializer_class = ReleaseSerializer
+
+    def get_queryset(self):
+        pk = self.kwargs['pk']
+        queryset = self.queryset
+        query_set = queryset.filter(game=pk)
+        return query_set
