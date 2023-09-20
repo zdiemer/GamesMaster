@@ -1,3 +1,4 @@
+import logging
 import random
 import re
 from datetime import datetime
@@ -142,7 +143,9 @@ class GameFaqsClient(ClientBase):
         if any(a_tags):
             rand_a = random.sample(a_tags, k=1)[0]
             href = str(rand_a["href"]).replace("/", "", 1)
-            print(f"Disguising traffic with {self.__BASE_GAMEFAQS_URL}/{href}")
+            logging.debug(
+                "Disguising traffic with %s/%s", self.__BASE_GAMEFAQS_URL, href
+            )
             await self._make_request(href, as_json=False)
 
     async def home_game_search(self, term: str):
@@ -231,7 +234,6 @@ class GameFaqsClient(ClientBase):
                 if guide_contents is not None:
                     gf_guide.full_text = guide_contents.get_text(" ").strip()
 
-            print(gf_guide)
             guides.append(gf_guide)
 
         return guides
@@ -365,19 +367,22 @@ class GameFaqsClient(ClientBase):
         return gf_game
 
     async def match_game(self, game: ExcelGame) -> List[GameMatch]:
+        self._rate_limiter.settings = RateLimit(random.randint(1, 5), DatePart.MINUTE)
         results = await self.home_game_search(game.title)
         matches: List[GameMatch] = []
 
-        for r in results:
-            if r.get("footer"):
+        for res in results:
+            if res.get("footer"):
                 continue
-            if r.get("game_name") and r.get("plats"):
+            if res.get("game_name") and res.get("plats"):
                 match = self.validator.validate(
-                    game, r["game_name"], r["plats"].split(", ")
+                    game, res["game_name"], res["plats"].split(", ")
                 )
-                if match.matched:
-                    gf_game = await self.get_gamefaqs_game(r, game.platform)
-                    if self.validator.verify_release_year(
+
+                if match.likely_match:
+                    gf_game = await self.get_gamefaqs_game(res, game.platform)
+
+                    releases_match = self.validator.verify_release_year(
                         game.release_year,
                         [
                             rel.release_year
@@ -388,11 +393,14 @@ class GameFaqsClient(ClientBase):
                                 gf_game.releases,
                             )
                         ],
-                    ):
-                        matches.append(
-                            GameMatch(
-                                gf_game.title, gf_game.url, gf_game.id, gf_game, match
-                            )
+                    )
+
+                    match.date_matched = releases_match
+
+                    matches.append(
+                        GameMatch(
+                            gf_game.title, gf_game.url, gf_game.id, gf_game, match
                         )
+                    )
 
         return matches

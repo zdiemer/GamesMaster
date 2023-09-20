@@ -7,8 +7,9 @@ release years.
 
 import html
 import re
+import roman
 import unicodedata
-from typing import Dict, List, NamedTuple
+from typing import Dict, List
 
 import edit_distance
 
@@ -16,7 +17,7 @@ from excel_game import ExcelGame
 from constants import PLATFORM_NAMES
 
 
-class ValidationInfo(NamedTuple):
+class ValidationInfo:
     """Information about a validation.
 
     ValidationInfo contains information on whether this match
@@ -25,10 +26,40 @@ class ValidationInfo(NamedTuple):
     Attributes:
         matched: Whether this represents a match
         exact: Whether this represents an exact match
+        platform_matched: Whether this represents a platform match
+        date_matched: Whether this represents a date match
     """
 
     matched: bool
     exact: bool
+    platform_matched: bool
+    date_matched: bool
+
+    def __init__(
+        self,
+        matched: bool,
+        exact: bool = False,
+        platform_matched: bool = False,
+        date_matched: bool = False,
+    ):
+        self.matched = matched
+        self.exact = exact
+        self.platform_matched = platform_matched
+        self.date_matched = date_matched
+
+    @property
+    def likely_match(self):
+        """Returns whether this is a likely match (i.e. title and platform)"""
+        return self.matched and self.platform_matched
+
+    @property
+    def full_match(self):
+        """Returns whether this is a full match, but not necessarily exact
+
+        This method checks whether all properties have matched, but doesn't
+        guarantee that this is an exact title match.
+        """
+        return self.matched and self.platform_matched and self.date_matched
 
 
 class MatchValidator:
@@ -111,8 +142,7 @@ class MatchValidator:
             return self.titles_equal_normalized(f"{t_1}version", t_2)
         return False
 
-    @staticmethod
-    def romanize(string: str) -> str:
+    def romanize(self, string: str) -> str:
         """Romanizes a string by replacing certain special characters with Latin.
 
         This method takes certain commonly occuring characters found in Japanese
@@ -131,14 +161,35 @@ class MatchValidator:
             .replace("Ū", "U")
         )
 
+    def roman_numeralize(self, string: str) -> str:
+        """Converts Roman numeral parts to real numbers.
+
+        This method takes in a string and converts any of its whitespace
+        split parts into real numbers instead of Roman numerals.
+
+        Args:
+            string: The string to Roman numeralize
+
+        Returns:
+            A Roman numeralized string
+        """
+
+        def try_roman_numeralize(_str: str) -> str:
+            try:
+                return str(roman.fromRoman(_str.upper()))
+            except roman.InvalidRomanNumeralError:
+                return _str
+
+        return " ".join([try_roman_numeralize(_str) for _str in string.split(" ")])
+
     def normalize(self, string: str) -> str:
         """Normalizes a string with many normalization methods.
 
         This method transforms a string in a number of ways to do a
         normalized comparison. It strips trademark and copyright symbols,
         Romanizes the string, unescapes HTML, removes trailing dates (e.g. (2004)),
-        lowercases the string, replaces ampersand with "and," normalizes Unicode, and
-        strips non-alphanumeric characters.
+        lowercases the string, replaces ampersand with "and," normalizes Unicode,
+        strips non-alphanumeric characters, and converts Roman numerals to real numbers.
 
         Args:
             string: The string to normalize
@@ -157,10 +208,12 @@ class MatchValidator:
                         r"( \([0-9]{4}\))",
                         "",
                         html.unescape(
-                            MatchValidator.romanize(
-                                string.replace("™", "")
-                                .replace("®", "")
-                                .replace("©", "")
+                            self.roman_numeralize(
+                                self.romanize(
+                                    string.replace("™", "")
+                                    .replace("®", "")
+                                    .replace("©", "")
+                                )
                             )
                         )
                         .casefold()
@@ -177,8 +230,8 @@ class MatchValidator:
         self,
         game: ExcelGame,
         title: str,
-        platforms: List[str],
-        release_years: List[int] = [],
+        platforms: List[str] = None,
+        release_years: List[int] = None,
     ) -> ValidationInfo:
         """Validates a potential matches characteristics against a row.
 
@@ -190,27 +243,33 @@ class MatchValidator:
             platforms: A list of platforms to verify
             release_years: A list of release years to verify
         """
-        platform_equal = MatchValidator.verify_platform(game.platform, platforms)
-
-        if not platform_equal:
-            return ValidationInfo(False, False)
-
-        year_equal = not any(release_years) or MatchValidator.verify_release_year(
-            game.release_year, release_years
-        )
-
-        if not year_equal:
-            return ValidationInfo(False, False)
-
         normal_equal = self.titles_equal_normalized(game.title, title)
 
-        if normal_equal:
-            return ValidationInfo(True, True)
+        fuzzy_equal = normal_equal or self.titles_equal_fuzzy(game.title, title)
 
-        return ValidationInfo(self.titles_equal_fuzzy(game.title, title), False)
+        if not fuzzy_equal:
+            return ValidationInfo(matched=False)
 
-    @staticmethod
-    def verify_platform(platform: str, platforms: List[str]) -> bool:
+        platform_equal = (
+            platforms is not None
+            and any(platforms)
+            and self.verify_platform(game.platform, platforms)
+        )
+
+        year_equal = (
+            release_years is not None
+            and any(release_years)
+            and self.verify_release_year(game.release_year, release_years)
+        )
+
+        return ValidationInfo(
+            matched=normal_equal or self.titles_equal_fuzzy(game.title, title),
+            exact=normal_equal,
+            platform_matched=platform_equal,
+            date_matched=year_equal,
+        )
+
+    def verify_platform(self, platform: str, platforms: List[str]) -> bool:
         """Verifies whether a list of platforms contains a given platform.
 
         This method ensures that a given platform matches any platforms exactly
@@ -233,8 +292,7 @@ class MatchValidator:
             )
         )
 
-    @staticmethod
-    def verify_release_year(release_year: int, release_years: List[int]) -> bool:
+    def verify_release_year(self, release_year: int, release_years: List[int]) -> bool:
         """Verifies whether a release year is within a list of release years.
 
         This methods ensures that a given release year matches any release years.

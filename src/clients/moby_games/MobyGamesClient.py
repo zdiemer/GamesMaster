@@ -85,65 +85,60 @@ class MobyGamesClient(ClientBase):
             },
         )
 
-        try:
-            return [
-                Game(
-                    [
-                        AlternateTitle(alt["description"], alt["title"])
-                        for alt in game["alternative_titles"]
-                    ]
-                    if game.get("alternative_titles") is not None
-                    else [],
-                    game["description"],
-                    game["game_id"],
-                    [
-                        Genre(
-                            GenreCategory(
-                                genre["genre_category"], genre["genre_category_id"]
-                            ),
-                            genre["genre_id"],
-                            genre["genre_name"],
-                        )
-                        for genre in game["genres"]
-                    ],
-                    game["moby_score"],
-                    game["moby_url"],
-                    game["num_votes"],
-                    game["official_url"],
-                    [
-                        GamePlatform(
-                            Platform(
-                                platform["platform_id"], platform["platform_name"]
-                            ),
-                            platform["first_release_date"],
-                        )
-                        for platform in game["platforms"]
-                    ],
-                    Cover(
-                        game["sample_cover"]["height"],
-                        game["sample_cover"]["image"],
-                        game["sample_cover"]["platforms"],
-                        game["sample_cover"]["thumbnail_image"],
-                        game["sample_cover"]["width"],
+        return [
+            Game(
+                [
+                    AlternateTitle(alt["description"], alt["title"])
+                    for alt in game["alternative_titles"]
+                ]
+                if game.get("alternative_titles") is not None
+                else [],
+                game["description"],
+                game["game_id"],
+                [
+                    Genre(
+                        GenreCategory(
+                            genre["genre_category"], genre["genre_category_id"]
+                        ),
+                        genre["genre_id"],
+                        genre["genre_name"],
                     )
-                    if game.get("sample_cover") is not None
-                    else None,
-                    [
-                        Screenshot(
-                            screenshot["caption"],
-                            screenshot["height"],
-                            screenshot["image"],
-                            screenshot["thumbnail_image"],
-                            screenshot["width"],
-                        )
-                        for screenshot in game["sample_screenshots"]
-                    ],
-                    html.unescape(game["title"]),
+                    for genre in game["genres"]
+                ],
+                game["moby_score"],
+                game["moby_url"],
+                game["num_votes"],
+                game["official_url"],
+                [
+                    GamePlatform(
+                        Platform(platform["platform_id"], platform["platform_name"]),
+                        platform["first_release_date"],
+                    )
+                    for platform in game["platforms"]
+                ],
+                Cover(
+                    game["sample_cover"]["height"],
+                    game["sample_cover"]["image"],
+                    game["sample_cover"]["platforms"],
+                    game["sample_cover"]["thumbnail_image"],
+                    game["sample_cover"]["width"],
                 )
-                for game in res["games"]
-            ]
-        except KeyError:
-            raise
+                if game.get("sample_cover") is not None
+                else None,
+                [
+                    Screenshot(
+                        screenshot["caption"],
+                        screenshot["height"],
+                        screenshot["image"],
+                        screenshot["thumbnail_image"],
+                        screenshot["width"],
+                    )
+                    for screenshot in game["sample_screenshots"]
+                ],
+                html.unescape(game["title"]),
+            )
+            for game in res["games"]
+        ]
 
     async def match_game(self, game: ExcelGame) -> List[GameMatch]:
         results = await self.games(title=game.title)
@@ -154,41 +149,45 @@ class MobyGamesClient(ClientBase):
 
             years = []
 
-            for gp in game_platforms.get("releases") or []:
-                if gp.get("release_date") is not None:
-                    years.append(int(gp["release_date"][0:4]))
+            for plat in game_platforms.get("releases") or []:
+                if plat.get("release_date") is not None:
+                    years.append(int(plat["release_date"][0:4]))
 
             return years
 
-        for g in results:
-            if g.platforms is None:
+        for res in results:
+            if res.platforms is None:
                 continue
 
-            platform_names = [p.platform.name for p in g.platforms]
+            platform_names = [p.platform.name for p in res.platforms]
             pid = 0
 
-            for p in g.platforms:
-                if MatchValidator.verify_platform(game.platform, [p.platform.name]):
-                    pid = p.platform.id
+            for plat in res.platforms:
+                if self.validator.verify_platform(game.platform, [plat.platform.name]):
+                    pid = plat.platform.id
 
-            match = self.validator.validate(game, g.title, platform_names)
+            match = self.validator.validate(game, res.title, platform_names)
 
-            if match.matched:
-                if MatchValidator.verify_release_year(
-                    game.release_year, await get_years(g.id, pid)
-                ):
-                    matches.append(GameMatch(g.title, g.moby_url, g.id, g, match))
-            elif g.alternate_titles is not None:
+            if match.likely_match:
+                match.date_matched = self.validator.verify_release_year(
+                    game.release_year, await get_years(res.id, pid)
+                )
+
+                matches.append(GameMatch(res.title, res.moby_url, res.id, res, match))
+            elif res.alternate_titles is not None:
                 if any(
-                    match.matched
+                    match.likely_match
                     for match in [
                         self.validator.validate(game, alt.title, platform_names)
-                        for alt in g.alternate_titles
+                        for alt in res.alternate_titles
                     ]
                 ):
-                    if MatchValidator.verify_release_year(
-                        game.release_year, await get_years(g.id, pid)
-                    ):
-                        matches.append(GameMatch(g.title, g.moby_url, g.id, g, match))
+                    match.date_matched = self.validator.verify_release_year(
+                        game.release_year, await get_years(res.id, pid)
+                    )
+
+                    matches.append(
+                        GameMatch(res.title, res.moby_url, res.id, res, match)
+                    )
 
         return matches

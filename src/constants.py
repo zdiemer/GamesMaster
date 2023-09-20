@@ -2,7 +2,7 @@
 
 PLATFORM_NAMES = {
     "3do": ["3do interactive multiplayer"],
-    "acorn electron": [],
+    "acorn electron": ["electron"],
     "amstrad cpc": ["cpc"],
     "android": [],
     "apple ii": ["apple iigs"],
@@ -33,7 +33,7 @@ PLATFORM_NAMES = {
     "epoch super cassette vision": ["super cassette vision"],
     "fm towns": [],
     "fm-7": ["fujitsu fm-7"],
-    "famicom disk system": ["fds", "family computer disk system"],
+    "famicom disk system": ["fds", "family computer disk system", "nes"],
     "game boy": ["nintendo game boy", "gb"],
     "game boy advance": ["nintendo game boy advance", "gba"],
     "game boy color": ["nintendo game boy color", "gbc"],
@@ -46,7 +46,7 @@ PLATFORM_NAMES = {
     "msx2": ["msx"],
     "mac os": ["macintosh", "mac"],
     "n-gage": ["ngage"],
-    "n-gage 2.0": ["n-gage", "ngage"],
+    "n-gage 2.0": ["n-gage", "ngage", "n-gage (service)"],
     "nec pc-8801": [
         "pc-8801",
         "pc",
@@ -86,7 +86,7 @@ PLATFORM_NAMES = {
     "nintendo switch": ["switch", "ns"],
     "nintendo wii": ["wii", "wii shop"],
     "nintendo wii u": ["wii u", "wiiu", "wii u eshop", "nintendo wii u eshop"],
-    "oculus quest": ["oq", "oculus fr"],
+    "oculus quest": ["oq", "oculus vr", "quest"],
     "ouya": [],
     "pc": [
         "windows pc",
@@ -108,7 +108,7 @@ PLATFORM_NAMES = {
     "playstation 5": ["ps5", "sony playstation 5", "playstation vr2", "psvr2"],
     "playstation network": ["psn"],
     "playstation portable": ["psp"],
-    "playstation vita": ["psvita", "vita"],
+    "playstation vita": ["psvita", "vita", "ps vita"],
     "playdate": [],
     "snes": [
         "super famicom",
