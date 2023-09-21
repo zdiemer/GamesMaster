@@ -19,8 +19,17 @@ export default function Games({
     let gameList = [];
 
     for (let results of games.results) {
-        let title = results.title;
-        gameList.push(<div className={styles.game}>{title}</div>);
+        gameList.push(
+            <div className={styles.game}>
+                <h2>{results.title}</h2>
+                <p>{results.modes.join(", ")}</p>
+                <p>{results.genres.join(", ")}</p>
+                <p>
+                    Developed by:
+                    <br/>
+                    {results.developers.join(", ")}
+                </p>
+            </div>);
     }
 
     return (
