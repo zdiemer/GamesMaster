@@ -1,0 +1,22 @@
+.body {
+    background-color: rgb(227, 227, 227);
+}
+
+.page {
+    max-width: 500px;
+    margin: auto;
+    min-height: 100vh;
+    background-color: white;
+    padding: 8px;
+}
+
+.container {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: 1fr 1fr 1fr;
+}
+
+.game {
+    border: 1px solid black;
+    padding: 8px;
+}
