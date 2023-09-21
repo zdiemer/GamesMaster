@@ -8,10 +8,12 @@ services:
       - POSTGRES_DB=postgres
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
+    networks:
+      - backend
   backend:
     build:
       context: ./game_manager
-      dockerfile: .
+      dockerfile: Dockerfile
     command: python manage.py runserver 0.0.0.0:8000
     volumes:
       - ./game_manager:/code
@@ -29,5 +31,28 @@ services:
       retries: 5
       start_period: 5s
       timeout: 10s
+    networks:
+      - backend
+  next-app:
+    container_name: next-app
+    build:
+      context: ./game_frontend/with-docker-compose-app/next-app
+      dockerfile: dev.Dockerfile
+
+    # Set envrionment variables based on the .env file
+    env_file:
+      - ./game_frontend/with-docker-compose-app/.env
+    volumes:
+      - ./game_frontend/with-docker-compose-app/next-app/src:/app/src
+      - ./game_frontend/with-docker-compose-app/next-app/public:/app/public
+    restart: always
+    ports:
+      - 3000:3000
+    networks:
+      - backend
+      - frontend
 volumes:
   database_volume:
+networks:
+  backend:
+  frontend:

@@ -10,13 +10,13 @@ done;
 echo "stack started"
 
 echo "making migrations"
-docker compose exec web python manage.py makemigrations
+docker compose exec backend python manage.py makemigrations
 
 echo "applying migrations"
-docker compose exec web python manage.py migrate
+docker compose exec backend python manage.py migrate
 
 echo "initializing test data"
-docker compose exec web python manage.py runscript test_data
+docker compose exec backend python manage.py runscript test_data
 
 echo "creating default superuser"
-docker compose exec web python manage.py runscript create_superuser
+docker compose exec backend python manage.py runscript create_superuser
