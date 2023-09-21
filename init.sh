@@ -1,7 +1,7 @@
 docker compose up -d
 
 echo "starting stack"
-until [ "`docker inspect -f {{.State.Health.Status}} game_manager-web-1`" = "healthy" ]
+until [ "`docker inspect -f {{.State.Health.Status}} games-master-backend-1`" = "healthy" ]
 do  
     echo "Web not healthy yet."
     sleep 1;

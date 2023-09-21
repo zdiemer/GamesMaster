@@ -2,4 +2,4 @@ echo "Destroying stack."
 docker compose down -v
 
 echo "Destroying migrations."
-rm -f backend/migrations/000*py
+rm -f game_manager/backend/migrations/000*py

@@ -4,15 +4,16 @@ from django.db import models
 class Genre(models.Model):
     name = models.CharField(max_length=200)
 
-    def __str__(self):
-        return self.name
+    def __str__(self) -> str:
+        return f"{self.name}"
 
 
 class Mode(models.Model):
     mode = models.CharField(max_length=200)
 
-    def __str__(self):
-        return self.mode
+    def __str__(self) -> str:
+        return f"{self.mode}"
+
 
 class Platform(models.Model):
     name = models.CharField(max_length=200)
@@ -92,6 +93,7 @@ class Release(models.Model):
     game = models.ForeignKey(Game, on_delete=models.PROTECT)
     publishers = models.ManyToManyField(Company)
 
+
 class Purchase(models.Model):
     SEALED = "SL"
     COMPLETE = "CO"
@@ -115,7 +117,7 @@ class Purchase(models.Model):
     CONDITION_CHOICES = [
         (BROKEN_BOX, "Broken Box"),
         (SCRATCHES, "Scratches"),
-        (STICKERS, "Stickers")
+        (STICKERS, "Stickers"),
     ]
     condition_type = models.CharField(
         max_length=2,
