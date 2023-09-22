@@ -2,8 +2,9 @@ from django.http import HttpResponse, JsonResponse
 from django.core import serializers
 from django.contrib.auth.models import User, Group
 from rest_framework import viewsets, permissions, status, generics
+from django.contrib.postgres.aggregates import ArrayAgg
 
-from .serializers import GenreSerializer, CompanySerializer, ModeSerializer, PlatformSerializer, GameSerializer, ReleaseSerializer
+from .serializers import GenreSerializer, CompanySerializer, ModeSerializer, PlatformSerializer, GameListSerializer, GameDetailSerializer, ReleaseSerializer
 from .models import Game, Release, Platform, Genre, NotableDeveloper, Purchase, Company, Mode
 
 def healthcheck(request):
@@ -98,12 +99,20 @@ class PlatformList(generics.ListCreateAPIView):
 
 class GameList(generics.ListCreateAPIView):
     queryset = Game.objects.all()
-    serializer_class = GameSerializer
+    serializer_class = GameListSerializer
+
+    def get_queryset(self):
+        queryset = self.queryset
+        collections_only = self.request.query_params.get('collections_only')
+        if collections_only:
+            return queryset.exclude(collectees=None)
+        else:
+            return queryset.filter(game_dlc=None).filter(collectees=None).order_by("title")
 
 
 class GameDetailList(generics.RetrieveUpdateDestroyAPIView):
     queryset = Game.objects.all()
-    serializer_class = GameSerializer
+    serializer_class = GameDetailSerializer
 
 
 class GameRelease(viewsets.ModelViewSet):
