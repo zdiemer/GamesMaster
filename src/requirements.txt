@@ -4,3 +4,6 @@ python-steam-api
 bs4
 edit-distance
 openpyxl
+roman
+fake-headers
+jsonpickle

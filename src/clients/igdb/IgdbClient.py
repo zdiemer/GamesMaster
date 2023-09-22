@@ -89,8 +89,8 @@ class IgdbClient(ClientBase):
         results = await self.games(search_data)
         matches: List[GameMatch] = []
 
-        for r in results:
-            platforms = r.get("platforms") or []
+        for res in results:
+            platforms = res.get("platforms") or []
 
             platforms_processed = [self.__platforms[p] for p in platforms]
 
@@ -98,7 +98,7 @@ class IgdbClient(ClientBase):
 
             date_responses = [
                 await self.release_dates(f"fields date; where id = {rid};")
-                for rid in (r.get("release_dates") or [])
+                for rid in (res.get("release_dates") or [])
             ]
 
             for date_response in date_responses:
@@ -112,13 +112,15 @@ class IgdbClient(ClientBase):
                 continue
 
             match = self.validator.validate(
-                game, r.get("name"), platforms_processed, release_years
+                game, res.get("name"), platforms_processed, release_years
             )
 
-            if match.matched:
-                matches.append(GameMatch(r["name"], r["url"], r["id"], r, match))
-            elif r.get("alternative_names") is not None:
-                for alt in r["alternative_names"]:
+            if match.likely_match:
+                matches.append(
+                    GameMatch(res["name"], res["url"], res["id"], res, match)
+                )
+            elif res.get("alternative_names") is not None:
+                for alt in res["alternative_names"]:
                     names = await self.alternative_names(
                         f"fields name; where id = {alt};"
                     )
@@ -130,9 +132,9 @@ class IgdbClient(ClientBase):
                         game, names[0].get("name"), platforms_processed, release_years
                     )
 
-                    if match.matched:
+                    if match.likely_match:
                         matches.append(
-                            GameMatch(r["name"], r["url"], r["id"], r, match)
+                            GameMatch(res["name"], res["url"], res["id"], res, match)
                         )
 
         return matches

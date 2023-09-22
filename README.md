@@ -21,9 +21,14 @@ $ touch static/config.json
     "igdbClientId": "...",
     "igdbClientSecret": "...",
     "steamWebApiKey": "...",
-    "itchioApiKey": "..."
+    "priceChartingApiKey": "..."
 }
 ```
+
+## Running Parsers
+
+1. Configure the `if __name__ == "__main__":` block of `excel_parser.py` according to desired settings.
+2. Run `python ./src/excel_parser.py` from the root of the project.
 
 ## Django commands ran
 

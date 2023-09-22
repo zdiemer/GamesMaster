@@ -173,13 +173,13 @@ class RomHackingClient(ClientBase):
 
         return await self._make_request("", params)
 
-    async def match_game(self, game: ExcelGame) -> List[GameMatch]:
-        if (
+    def should_skip(self, game: ExcelGame) -> bool:
+        return (
             game.release_region in (ExcelRegion.NORTH_AMERICA, ExcelRegion.EUROPE)
             or not game.platform.lower() in self.__PLATFORM_ID_MAPPINGS
-        ):
-            return []
+        )
 
+    async def match_game(self, game: ExcelGame) -> List[GameMatch]:
         text = await self.translations(
             game.title, self.__PLATFORM_ID_MAPPINGS[game.platform.lower()]
         )
@@ -188,20 +188,23 @@ class RomHackingClient(ClientBase):
         results = soup.find_all("tr", {"class": "even", "class": "odd"})
         matches: List[GameMatch] = []
 
-        for r in results:
-            title = r.find("td", {"class": "col_1"})
+        for res in results:
+            title = res.find("td", {"class": "col_1"})
             name = title.a.text.strip()
             url = title.a["href"]
-            released_by = r.find("td", {"class": "col_2"})
+            released_by = res.find("td", {"class": "col_2"})
             released_by_name = released_by.a.text.strip()
             released_by_url = released_by.a["href"]
-            genre = r.find("td", {"class": "col_3"}).text.strip()
+            genre = res.find("td", {"class": "col_3"}).text.strip()
             category = Category[
-                r.find("td", {"class": "col_5"}).text.strip().replace(" ", "_").upper()
+                res.find("td", {"class": "col_5"})
+                .text.strip()
+                .replace(" ", "_")
+                .upper()
             ]
-            version = r.find("td", {"class": "col_6"}).text.strip()
+            version = res.find("td", {"class": "col_6"}).text.strip()
             translation_release = datetime.strptime(
-                r.find("td", {"class": "col_7"}).text.strip(), "%d %b %Y"
+                res.find("td", {"class": "col_7"}).text.strip(), "%d %b %Y"
             )
 
             rh_info = {
@@ -215,9 +218,16 @@ class RomHackingClient(ClientBase):
                 "translation_release": translation_release,
             }
 
-            if self.validator.titles_equal_fuzzy(name, game.title):
+            match = self.validator.validate(game, name, [game.platform])
+
+            if match.likely_match:
                 matches.append(
-                    GameMatch(rh_info["name"], rh_info["url"], match_info=rh_info)
+                    GameMatch(
+                        rh_info["name"],
+                        rh_info["url"],
+                        match_info=rh_info,
+                        validation_info=match,
+                    )
                 )
 
         return matches

@@ -22,6 +22,12 @@ class ExcelRegion(Enum):
     KOREA = "KO"
     NORTH_AMERICA = "NA"
 
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
 
 class ExcelGame:
     """Class representing a game row from the spreadsheet.
@@ -90,3 +96,9 @@ class ExcelGame:
     def full_name(self) -> str:
         """Property to return a game's full name including platform and release year"""
         return f"{self.title} ({self.platform}) [{self.release_year or 'Early Access'}]"
+
+    def __str__(self) -> str:
+        return str(self.__dict__)
+
+    def __repr__(self) -> str:
+        return self.__str__()

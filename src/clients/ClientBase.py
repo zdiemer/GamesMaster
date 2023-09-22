@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-import aiohttp
 import asyncio
+import logging
 import random
+import traceback
 import urllib.parse
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Callable, Coroutine, Dict, List, Optional, Union
+from typing import Any, Callable, Coroutine, Dict, List, Optional, Tuple, Union
 
+import aiohttp
 from fake_headers import Headers
 
 from config import Config
@@ -71,24 +73,26 @@ class ExponentialBackoff:
     async def backoff(self, url: str, status: int):
         if self._backoffs + 1 > self.max_backoffs:
             raise ResponseNotOkError
-        print(f"Backing off for {self.backoff_seconds}s for {url} due to {status}")
+        logging.warning(
+            "Backing off for %ss for %s due to %s", self.backoff_seconds, url, status
+        )
         await asyncio.sleep(self.backoff_seconds + random.random())
         self.backoff_seconds **= self.exponent
         self._backoffs += 1
 
 
 class RateLimiter:
-    _settings: RateLimit
+    settings: RateLimit
     _last_calls: Dict[str, datetime]
 
     def __init__(self, limit: RateLimit = RateLimit()):
-        self._settings = limit
+        self.settings = limit
         self._last_calls = {}
 
     @property
     def seconds_between_requests(self) -> float:
-        per = self._settings.per
-        _max = self._settings.max_req
+        per = self.settings.per
+        _max = self.settings.max_req
         if per == DatePart.SECOND:
             return 1.0 / _max
         if per == DatePart.MINUTE:
@@ -117,8 +121,8 @@ class RateLimiter:
     ) -> Union[str, Any]:
         key = (
             urllib.parse.urlparse(url).netloc
-            if not self._settings.rate_limit_per_route
-            else self._settings.get_route_path(url)
+            if not self.settings.rate_limit_per_route
+            else self.settings.get_route_path(url)
         )
 
         utcnow = datetime.utcnow()
@@ -128,7 +132,9 @@ class RateLimiter:
             delta = next_call - utcnow
             sleep_time_seconds = delta.seconds + (delta.microseconds / 1_000_000.0)
             if sleep_time_seconds >= 5.0:
-                print(f"Throttling {sleep_time_seconds:,.2f}s for {url}")
+                logging.debug(
+                    "Throttling %ss for %s", f"{sleep_time_seconds:,.2f}", url
+                )
             await asyncio.sleep(sleep_time_seconds)
 
         self._last_calls[key] = datetime.utcnow()
@@ -142,10 +148,10 @@ class ClientBase:
     __cached_responses: Dict[int, Union[Any, str]]
     __default_headers: Dict[str, str]
     __next_headers: datetime
-    __rate_limiter: RateLimiter
     __spoof_headers: bool
 
     _config: Config
+    _rate_limiter: RateLimiter
 
     validator: MatchValidator
 
@@ -159,7 +165,7 @@ class ClientBase:
         self.validator = validator
         self._config = config or Config.create()
         self.__default_headers = {"User-Agent": self._config.user_agent}
-        self.__rate_limiter = RateLimiter(limit)
+        self._rate_limiter = RateLimiter(limit)
         self.__spoof_headers = spoof_headers
         self.__next_headers = datetime.utcnow()
         self.__cached_headers = None
@@ -168,9 +174,9 @@ class ClientBase:
     def _get_headers(self) -> dict:
         if self.__cached_headers is None or datetime.utcnow() > self.__next_headers:
             self.__cached_headers = Headers().generate()
-            print(
-                "Refreshing spoofed headers with User-Agent: "
-                f"{self.__cached_headers.get('User-Agent')}"
+            logging.info(
+                "Refreshing spoofed headers with User-Agent: %s",
+                self.__cached_headers.get("User-Agent"),
             )
             self.__next_headers = datetime.utcnow() + timedelta(
                 minutes=self.__SPOOF_HEADER_LIFETIME_MINUTES
@@ -202,7 +208,7 @@ class ClientBase:
         req_hash = self._hash_request(url, params, data)
 
         if req_hash in self.__cached_responses:
-            print(f"Serving {url} from cache")
+            logging.debug("Serving %s from cache", url)
             return self.__cached_responses[req_hash]
 
         if headers is None:
@@ -226,7 +232,7 @@ class ClientBase:
                     self.__cached_responses[req_hash] = res_val
                     return res_val
 
-        return await self.__rate_limiter.request(url, do_req)
+        return await self._rate_limiter.request(url, do_req)
 
     async def get(
         self,
@@ -251,3 +257,18 @@ class ClientBase:
 
     async def match_game(self, game: ExcelGame) -> List[GameMatch]:
         raise NotImplementedError
+
+    def should_skip(self, game: ExcelGame) -> bool:
+        return False
+
+    async def try_match_game(
+        self, game: ExcelGame
+    ) -> Tuple[bool, Optional[List[GameMatch]], Optional[str]]:
+        try:
+            if self.should_skip(game):
+                return (True, None, None)
+            return (True, await self.match_game(game), None)
+        except NotImplementedError:
+            raise
+        except Exception as exc:
+            return (False, None, "\n".join(traceback.format_exception(exc)))

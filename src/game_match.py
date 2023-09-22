@@ -1,8 +1,9 @@
 """Classes for holding match info about game rows to external sources."""
 
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, List, NamedTuple, Optional
 
+from excel_game import ExcelGame
 from match_validator import ValidationInfo
 
 
@@ -73,6 +74,31 @@ class GameMatch:
                 "validation_info": self.validation_info,
             }
         )
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
+
+class GameMatchResult:
+    game: ExcelGame
+    success: bool
+    matches: Optional[List[GameMatch]] = None
+    error: Optional[str] = None
+
+    def __init__(
+        self,
+        game: ExcelGame,
+        success: bool,
+        matches: Optional[List[GameMatch]] = None,
+        error: Optional[str] = None,
+    ):
+        self.game = game
+        self.success = success
+        self.matches = matches or []
+        self.error = error
+
+    def __str__(self) -> str:
+        return str(self.__dict__)
 
     def __repr__(self) -> str:
         return self.__str__()

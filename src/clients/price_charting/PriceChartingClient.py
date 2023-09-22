@@ -59,10 +59,10 @@ class PriceChartingClient(ClientBase):
             ),
         )
 
-    async def match_game(self, game: ExcelGame) -> List[GameMatch]:
-        if game.owned_format not in ("Both", "Physical"):
-            return []
+    def should_skip(self, game: ExcelGame) -> bool:
+        return game.owned_format not in ("Both", "Physical")
 
+    async def match_game(self, game: ExcelGame) -> List[GameMatch]:
         results = await self.products(query=game.title)
         matches: List[GameMatch] = []
 
@@ -71,8 +71,8 @@ class PriceChartingClient(ClientBase):
 
         default_match = None
 
-        for r in results["products"]:
-            platform = str(r["console-name"]).lower()
+        for res in results["products"]:
+            platform = str(res["console-name"]).lower()
 
             if platform.startswith("comic books") or platform == "strategy guide":
                 continue
@@ -91,7 +91,7 @@ class PriceChartingClient(ClientBase):
                 elif region_match == "asian english":
                     region = ExcelRegion.ASIA
 
-            product_name = str(r["product-name"])
+            product_name = str(res["product-name"])
 
             re_matches = re.search(self.__EDITION_REGEX, product_name)
 
@@ -117,30 +117,36 @@ class PriceChartingClient(ClientBase):
                             and game.release_region == ExcelRegion.JAPAN
                         )
                     ):
-                        default_match = r
+                        default_match = res
                 continue
 
             match = self.validator.validate(
-                game, self.__price_charting_normalization(r["product-name"]), [platform]
+                game,
+                self.__price_charting_normalization(res["product-name"]),
+                [platform],
             )
-            if match.matched:
+
+            if match.likely_match:
                 matches.append(
                     GameMatch(
-                        r["product-name"],
-                        id=r["id"],
-                        match_info=r,
+                        res["product-name"],
+                        id=res["id"],
+                        match_info=res,
                         validation_info=match,
                     )
                 )
+
         if not any(matches) and default_match is not None:
             platform = str(default_match["console-name"]).lower()
             platform = re.sub(self.__REGION_REGEX, "", platform)
+
             match = self.validator.validate(
                 game,
                 self.__price_charting_normalization(default_match["product-name"]),
                 [platform],
             )
-            if match.matched:
+
+            if match.likely_match:
                 matches.append(
                     GameMatch(
                         default_match["product-name"],
