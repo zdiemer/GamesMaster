@@ -1,15 +1,35 @@
+"""Views for the game_manager app."""
+import io
+import os
+
 from django.http import HttpResponse, JsonResponse
 from django.core import serializers
 from django.contrib.auth.models import User, Group
 from rest_framework import viewsets, permissions, status, generics
 from django.contrib.postgres.aggregates import ArrayAgg
 from minio import Minio
-import os 
 from PIL import Image
-import io
 
-from .serializers import PurchaseSerializer, GenreSerializer, CompanySerializer, ModeSerializer, PlatformSerializer, GameListSerializer, GameDetailSerializer, ReleaseSerializer
-from .models import Game, Release, Platform, Genre, NotableDeveloper, Purchase, Company, Mode
+from .serializers import (
+    PurchaseSerializer,
+    GenreSerializer,
+    CompanySerializer,
+    ModeSerializer,
+    PlatformSerializer,
+    GameListSerializer,
+    GameDetailSerializer,
+    ReleaseSerializer,
+)
+from .models import (
+    Game,
+    Release,
+    Platform,
+    Genre,
+    NotableDeveloper,
+    Purchase,
+    Company,
+    Mode,
+)
 
 minioClient = Minio(
     "minio:9000",
@@ -18,8 +38,10 @@ minioClient = Minio(
     secure=False,
 )
 
+
 def healthcheck(request):
     return HttpResponse("ok")
+
 
 def serveImage(request, image_id):
     response = None
@@ -33,40 +55,39 @@ def serveImage(request, image_id):
     im = Image.open(io.BytesIO(data))
     s = im.size
     # take in the height as a param.
-    ratio = 200/s[1]
-    newimg = im.resize((int(s[0]*ratio), int(s[1]*ratio)), Image.Resampling.LANCZOS)
-    
+    ratio = 200 / s[1]
+    newimg = im.resize((int(s[0] * ratio), int(s[1] * ratio)), Image.Resampling.LANCZOS)
+
     if data == None:
         return HttpResponse(f"failed to fetch")
     else:
         img_byte_arr = io.BytesIO()
-        newimg.save(img_byte_arr, format='PNG')
+        newimg.save(img_byte_arr, format="PNG")
         img_byte_arr = img_byte_arr.getvalue()
         return HttpResponse(img_byte_arr, content_type="image/png")
 
 
 def index(request):
     games_list = Game.objects.all()
-    res = '<h1>Game Manager</h1>'
+    res = "<h1>Game Manager</h1>"
     for game in games_list:
-        res += f'<div><h2>{game}</h2>'
+        res += f"<div><h2>{game}</h2>"
 
         # if we are the base for a collection...
-        collectees = game.collectees.all();
+        collectees = game.collectees.all()
         if collectees.count() > 0:
-            res += '<div>I am a collection, I contain:<ul>'
+            res += "<div>I am a collection, I contain:<ul>"
             for collectee in collectees:
-                res += f'<li>{collectee.title}</li>'
-            res += '</ul></div>'
-        
+                res += f"<li>{collectee.title}</li>"
+            res += "</ul></div>"
+
         # has dlc
         dlc = game.dlc.all()
         if dlc.count() > 0:
-            res += '<div>I have DLC:<ul>'
+            res += "<div>I have DLC:<ul>"
             for d in dlc:
-                res += f'<li>{d.title}</li>'
-            res += '</ul></div>'
-
+                res += f"<li>{d.title}</li>"
+            res += "</ul></div>"
 
         # developer(s)
         if game.developers.all().count() > 0:
@@ -76,14 +97,16 @@ def index(request):
         devs = NotableDeveloper.objects.filter(game=game)
         if devs.count() > 0:
             for dev in devs.all():
-                res += f'<div>&emsp;{dev.role}: {dev.developer.name}</div>'
+                res += f"<div>&emsp;{dev.role}: {dev.developer.name}</div>"
 
         # genres
         if game.genres.all().count() > 0:
             res += f'<div><span>{", ".join(g.name for g in game.genres.all())}</span></div>'
 
         if game.modes.all().count() > 0:
-            res += f'<div><span>{", ".join(g.mode for g in game.modes.all())}</span></div>'
+            res += (
+                f'<div><span>{", ".join(g.mode for g in game.modes.all())}</span></div>'
+            )
 
         # releases
         releases = Release.objects.filter(game=game)
@@ -93,9 +116,9 @@ def index(request):
             res += f'<div>&emsp;released on {release.release_date} for {" & ".join(plat.name for plat in platforms)} in {release.region.display_name} by {" & ".join(pub.name for pub in publishers)}</div>'
 
         res += "</div>"
-    
+
     purchased_games = Purchase.objects.all()
-    res += '<h1>Games in Collection</h1>'
+    res += "<h1>Games in Collection</h1>"
     for purchase in purchased_games:
         game = purchase.release.game
         res += f"<div><h2>{game.title}</h2>"
@@ -104,13 +127,13 @@ def index(request):
 
         res += "</div>"
 
-
     return HttpResponse(res)
 
 
 class ReleaseList(generics.ListCreateAPIView):
     queryset = Release.objects.all()
     serializer_class = ReleaseSerializer
+
 
 class CompanyList(generics.ListCreateAPIView):
     queryset = Company.objects.all()
@@ -138,11 +161,13 @@ class GameList(generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = self.queryset
-        collections_only = self.request.query_params.get('collections_only')
+        collections_only = self.request.query_params.get("collections_only")
         if collections_only:
             return queryset.exclude(collectees=None)
         else:
-            return queryset.filter(game_dlc=None).filter(collectees=None).order_by("title")
+            return (
+                queryset.filter(game_dlc=None).filter(collectees=None).order_by("title")
+            )
 
 
 class GameDetailList(generics.RetrieveUpdateDestroyAPIView):
@@ -155,17 +180,18 @@ class GameRelease(viewsets.ModelViewSet):
     serializer_class = ReleaseSerializer
 
     def get_queryset(self):
-        pk = self.kwargs['pk']
+        pk = self.kwargs["pk"]
         queryset = self.queryset
         query_set = queryset.filter(game=pk)
         return query_set
+
 
 class GamePurchase(viewsets.ModelViewSet):
     queryset = Purchase.objects.all()
     serializer_class = PurchaseSerializer
 
     def get_queryset(self):
-        pk = self.kwargs['pk']
+        pk = self.kwargs["pk"]
         queryset = self.queryset
         query_set = queryset.filter(release__game=pk)
         return query_set
