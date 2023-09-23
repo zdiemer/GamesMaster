@@ -4,7 +4,11 @@
     max-width: variables.$main-content-max-width;
     margin: 0 auto;
     min-height: 100vh;
+    min-width: variables.$main-content-min-width;
     // Prevent margin collapse.
     overflow: auto;
-    padding: 8px;
+}
+
+.main {
+    padding: 0 8px 8px;
 }

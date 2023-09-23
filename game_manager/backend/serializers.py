@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User, Group
 from rest_framework import serializers
 
-from .models import Game, Genre, Release, Company, Mode, Platform, NotableDeveloper
+from .models import Game, Genre, Release, Company, Mode, Platform, Purchase, NotableDeveloper
 
 
 class CompanySerializer(serializers.ModelSerializer):
@@ -133,3 +133,12 @@ class GameDetailSerializer(serializers.ModelSerializer):
         nds = NotableDeveloper.objects.filter(game=instance)
         return [NotableDeveloperSerializer(nd).data for nd in nds]
 
+class PurchaseSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Purchase
+        fields = [
+            "purchase_format",
+            "purchase_date",
+            "purchase_price",
+        ]

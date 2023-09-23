@@ -18,6 +18,7 @@ export default function Games() {
   console.log(`port: ${process.env.API_PORT}`);
   const { data: gameData, error, isLoading } = useSWR(!!id ? `/api/games/${id}` : null, fetcher);
   const { data: releaseData, error: error2, isLoading: isLoading2 } = useSWR(!!id ? `/api/games/${id}/releases` : null, fetcher);
+  const { data: purchaseData} = useSWR(!!id ? `/api/games/${id}/purchases` : null, fetcher);
 
   if (error || error2) return <div>Failed to fetch users.</div>;
   if (isLoading || isLoading2) return <h2>Loading...</h2>;
@@ -68,7 +69,6 @@ export default function Games() {
 
   return (
     <Page>
-        <Link href={`/`}>← back</Link>
         <h1>{gameData?.title}</h1>
         {/* // TODO: exterkamp - use real art for the games. */}
         <img src={`/images/${gameData?.cover_art_uuid}`} height={200}></img>
@@ -93,5 +93,11 @@ export default function Games() {
 
         {!!dlcStanza ? dlcStanza : ''}
         {!!collectionStanza ? collectionStanza : ''}
+
+        {purchaseData?.results.map((purchase: any, index) => {
+          return (
+            <div key={index} >{JSON.stringify(purchase)}</div>
+          );
+        })}
       </Page>)
 }

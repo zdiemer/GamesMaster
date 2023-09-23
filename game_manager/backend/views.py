@@ -8,7 +8,7 @@ import os
 from PIL import Image
 import io
 
-from .serializers import GenreSerializer, CompanySerializer, ModeSerializer, PlatformSerializer, GameListSerializer, GameDetailSerializer, ReleaseSerializer
+from .serializers import PurchaseSerializer, GenreSerializer, CompanySerializer, ModeSerializer, PlatformSerializer, GameListSerializer, GameDetailSerializer, ReleaseSerializer
 from .models import Game, Release, Platform, Genre, NotableDeveloper, Purchase, Company, Mode
 
 minioClient = Minio(
@@ -158,4 +158,14 @@ class GameRelease(viewsets.ModelViewSet):
         pk = self.kwargs['pk']
         queryset = self.queryset
         query_set = queryset.filter(game=pk)
+        return query_set
+
+class GamePurchase(viewsets.ModelViewSet):
+    queryset = Purchase.objects.all()
+    serializer_class = PurchaseSerializer
+
+    def get_queryset(self):
+        pk = self.kwargs['pk']
+        queryset = self.queryset
+        query_set = queryset.filter(release__game=pk)
         return query_set
