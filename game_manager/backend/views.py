@@ -3,12 +3,41 @@ from django.core import serializers
 from django.contrib.auth.models import User, Group
 from rest_framework import viewsets, permissions, status, generics
 from django.contrib.postgres.aggregates import ArrayAgg
+from minio import Minio
+import os 
 
 from .serializers import GenreSerializer, CompanySerializer, ModeSerializer, PlatformSerializer, GameListSerializer, GameDetailSerializer, ReleaseSerializer
 from .models import Game, Release, Platform, Genre, NotableDeveloper, Purchase, Company, Mode
 
+minioClient = Minio(
+    "minio:9000",
+    access_key=os.environ.get("MINIO_ROOT_USER"),
+    secret_key=os.environ.get("MINIO_ROOT_PASSWORD"),
+    secure=False,
+)
+
 def healthcheck(request):
     return HttpResponse("ok")
+
+def serveImage(request, image_id):
+    response = None
+    data = None
+    # try:
+    response = minioClient.get_object(
+        os.environ.get("MINIO_DEFAULT_BUCKET"),
+        image_id,
+    )
+    data = response.data
+    # except:
+    #     return HttpResponse(f"failed to fetch") 
+    # finally:
+    #     response.close()
+    #     response.release_conn()
+    if data == None:
+        return HttpResponse(f"failed to fetch")
+    else:
+        return HttpResponse(data, content_type="image/png")
+
 
 def index(request):
     games_list = Game.objects.all()

@@ -10,6 +10,7 @@ from . import views
 
 urlpatterns = [
     path("", views.index, name="index"),
+    path("images/<str:image_id>", views.serveImage, name="images"),
     path("api/companies", views.CompanyList.as_view()),
     path("api/genres", views.GenreList.as_view()),
     path("api/platforms", views.PlatformList.as_view()),

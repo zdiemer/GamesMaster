@@ -22,6 +22,27 @@ services:
       - POSTGRES_PASSWORD=postgres
     networks:
       - backend
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    hostname: minio
+    ports:
+      - "50300:9000"
+      - "50400:9001"
+    environment:
+      - MINIO_DEFAULT_BUCKET=${MINIO_DEFAULT_BUCKET}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      # - MINIO_SITE_REGION=${REGION:-us-east-1}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    volumes:
+      - minio_volume:/data
+    networks:
+      - backend
   backend:
     build:
       context: ./game_manager
@@ -35,8 +56,12 @@ services:
       - POSTGRES_NAME=postgres
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_DEFAULT_BUCKET=${MINIO_DEFAULT_BUCKET}
     depends_on:
       - db
+      - minio
     healthcheck:
       test: curl --fail http://localhost:${API_INTERNAL_PORT}/healthz || exit 1
       interval: 10s
@@ -62,6 +87,7 @@ services:
       - frontend
 volumes:
   database_volume:
+  minio_volume:
 networks:
   backend:
   frontend:
