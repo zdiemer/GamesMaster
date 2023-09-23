@@ -1,12 +1,13 @@
 import Head from 'next/head'
 import Image from 'next/image'
-import styles from '../../styles/Games.module.css'
+import styles from '../../styles/pages/games/games.module.css'
 import type { InferGetStaticPropsType, GetStaticPaths, GetStaticProps } from 'next'
 import { useRouter } from 'next/router'
 import useSWR from "swr";
 import { release } from 'os'
 import Link from 'next/link'
 import { Game } from '../../components/game';
+import Page from '../../components/page';
 
 export default function Games() {
   const router = useRouter()
@@ -26,13 +27,11 @@ export default function Games() {
     dlcStanza = (
       <div>
         <h2>DLC</h2>
-        <ul>
           {gameData?.dlc?.map((game: any, index) => {
             return (
-              <li key={index}><Game game={game} /></li>
+              <div key={index}><Game game={game} /></div>
             );
           })}
-        </ul>
       </div>
     );
   }
@@ -42,13 +41,11 @@ export default function Games() {
     collectionStanza = (
       <div>
         <h2>Collection Contents</h2>
-        <ul>
           {gameData?.collectees?.map((game: any, index) => {
             return (
-              <li key={index}><Game game={game} /></li>
+              <div key={index}><Game game={game} /></div>
             );
           })}
-        </ul>
       </div>
     );
   }
@@ -70,9 +67,8 @@ export default function Games() {
   }
 
   return (
-    <div className={styles.body}>
-      <div className={styles.page}>
-        <Link href={`/games`}>← back</Link>
+    <Page>
+        <Link href={`/`}>← back</Link>
         <h1>{gameData?.title}</h1>
         {/* // TODO: exterkamp - use real art for the games. */}
         <img src={`/images/${gameData?.cover_art_uuid}`} height={200}></img>
@@ -97,6 +93,5 @@ export default function Games() {
 
         {!!dlcStanza ? dlcStanza : ''}
         {!!collectionStanza ? collectionStanza : ''}
-      </div>
-    </div>)
+      </Page>)
 }

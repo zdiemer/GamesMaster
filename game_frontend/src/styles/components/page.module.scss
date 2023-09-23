@@ -1,0 +1,10 @@
+@use '../variables';
+
+.page {
+    max-width: variables.$main-content-max-width;
+    margin: 0 auto;
+    min-height: 100vh;
+    // Prevent margin collapse.
+    overflow: auto;
+    padding: 8px;
+}

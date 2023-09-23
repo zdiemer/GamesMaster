@@ -1,4 +1,4 @@
-import styles from '../styles/Games.module.css'
+import styles from '../styles/components/games.module.scss'
 import Link from 'next/link'
 
 
