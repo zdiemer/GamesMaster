@@ -72,6 +72,9 @@ class PriceChartingClient(ClientBase):
         default_match = None
 
         for res in results["products"]:
+            if any(m.is_guaranteed_match() for m in matches):
+                break
+
             platform = str(res["console-name"]).lower()
 
             if platform.startswith("comic books") or platform == "strategy guide":
@@ -124,6 +127,9 @@ class PriceChartingClient(ClientBase):
                 game,
                 self.__price_charting_normalization(res["product-name"]),
                 [platform],
+                [
+                    game.release_year
+                ],  # Price Charting doesn't provide release date so assume it's a match
             )
 
             if match.likely_match:
@@ -144,6 +150,9 @@ class PriceChartingClient(ClientBase):
                 game,
                 self.__price_charting_normalization(default_match["product-name"]),
                 [platform],
+                [
+                    game.release_year
+                ],  # Price Charting doesn't provide release date so assume it's a match
             )
 
             if match.likely_match:

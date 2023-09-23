@@ -61,6 +61,12 @@ class ValidationInfo:
         """
         return self.matched and self.platform_matched and self.date_matched
 
+    def __str__(self) -> str:
+        return str(self.__dict__)
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
 
 class MatchValidator:
     """The MatchValidator class implements functionality for matching games and rows.
@@ -108,8 +114,10 @@ class MatchValidator:
         Returns:
             Boolean indicating whether the two are fuzzy equal
         """
-        t1_fuzzy = re.sub(self.__THE_REGEX, "", t_1.split(":")[0])
-        t2_fuzzy = re.sub(self.__THE_REGEX, "", t_2.split(":")[0])
+        t_1 = str(t_1)
+        t_2 = str(t_2)
+        t1_fuzzy = re.sub(self.__THE_REGEX, "", t_1.split(":", maxsplit=1)[0])
+        t2_fuzzy = re.sub(self.__THE_REGEX, "", t_2.split(":", maxsplit=1)[0])
 
         return (
             self.titles_equal_normalized(t1_fuzzy, t2_fuzzy)
@@ -118,6 +126,7 @@ class MatchValidator:
                     a=self.normalize(t_1), b=self.normalize(t_2)
                 ).distance()
                 <= 2
+                and len(t_1) > 1
                 and not str.isdigit(t_1[-1])
                 and not str.isdigit(t_2[-1])
             )
@@ -197,6 +206,7 @@ class MatchValidator:
         Returns:
             A normalized string
         """
+        string = str(string)
         if string in self.__cached_normalization:
             return self.__cached_normalization[string]
         normalized = "".join(

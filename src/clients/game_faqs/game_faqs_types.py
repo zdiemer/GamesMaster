@@ -27,7 +27,7 @@ class GameFaqsGenre:
         self.parent_genre = parent_genre
 
     def __str__(self) -> str:
-        return str({"name": self.name, "parent_genre": self.parent_genre})
+        return str(self.__dict__)
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -55,11 +55,23 @@ class GameFaqsRegion(Enum):
     AS = "AS"
     SA = "SA"
 
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
 
 class GameFaqsReleaseStatus(Enum):
     RELEASED = 1
     CANCELED = 2
     UNRELEASED = 3
+
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
 
 class GameFaqsRelease:
@@ -75,20 +87,7 @@ class GameFaqsRelease:
     status: GameFaqsReleaseStatus = GameFaqsReleaseStatus.RELEASED
 
     def __str__(self) -> str:
-        return str(
-            {
-                "release_day": self.release_day,
-                "release_month": self.release_month,
-                "release_year": self.release_year,
-                "release_region": self.release_region.value,
-                "publisher": self.publisher,
-                "product_id": self.product_id,
-                "distribution_or_barcode": self.distribution_or_barcode,
-                "age_rating": self.age_rating,
-                "title": self.title,
-                "status": self.status.name.title(),
-            }
-        )
+        return str(self.__dict__)
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -125,18 +124,7 @@ class GameFaqsGuide:
     incomplete: bool = False
 
     def __str__(self) -> str:
-        return str(
-            {
-                "title": self.title,
-                "url": self.url,
-                "author_name": self.author_name,
-                "author_url": self.author_url,
-                "version": self.version,
-                "updated_date": self.updated_date,
-                "full_text": self.full_text,
-                "platform": self.platform,
-            }
-        )
+        return str(self.__dict__)
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -158,26 +146,10 @@ class GameFaqsGame:
     user_length_hours: Optional[float] = None
     user_length_hours_count: Optional[int] = None
     guides: Optional[List[GameFaqsGuide]] = None
+    aliases: Optional[List[str]] = None
 
     def __str__(self) -> str:
-        return str(
-            {
-                "id": self.id,
-                "title": self.title,
-                "url": self.url,
-                "platform": self.platform,
-                "releases": self.releases,
-                "developer": self.developer,
-                "franchises": self.franchises,
-                "user_rating": self.user_rating,
-                "user_rating_count": self.user_rating_count,
-                "user_difficulty": self.user_difficulty,
-                "user_difficulty_count": self.user_difficulty_count,
-                "user_length_hours": self.user_length_hours,
-                "user_length_hours_count": self.user_length_hours_count,
-                "guides": self.guides,
-            }
-        )
+        return str(self.__dict__)
 
     def __repr__(self) -> str:
         return self.__str__()

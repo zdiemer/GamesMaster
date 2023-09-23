@@ -142,11 +142,12 @@ class RateLimiter:
 
 
 class ClientBase:
-    __SPOOF_HEADER_LIFETIME_MINUTES: int = 5
+    __SPOOF_HEADER_LIFETIME_MINUTES: int = 60
 
     __cached_headers: Optional[dict]
     __cached_responses: Dict[int, Union[Any, str]]
     __default_headers: Dict[str, str]
+    __immediately_stop_not_ok: bool
     __next_headers: datetime
     __spoof_headers: bool
 
@@ -161,6 +162,7 @@ class ClientBase:
         config: Config = None,
         limit: RateLimit = RateLimit(),
         spoof_headers: bool = False,
+        immediately_stop_not_ok: bool = False,
     ):
         self.validator = validator
         self._config = config or Config.create()
@@ -170,11 +172,19 @@ class ClientBase:
         self.__next_headers = datetime.utcnow()
         self.__cached_headers = None
         self.__cached_responses = {}
+        self.__immediately_stop_not_ok = immediately_stop_not_ok
 
     def _get_headers(self) -> dict:
         if self.__cached_headers is None or datetime.utcnow() > self.__next_headers:
-            self.__cached_headers = Headers().generate()
-            logging.info(
+            new_headers = Headers().generate()
+            new_headers["Referer"] = "https://www.google.com/"
+            new_headers["Accept-Encoding"] = "gzip, deflate, br"
+            new_headers["Accept-Language"] = "en-US,en;q=0.9,ja;q=0.8"
+            new_headers[
+                "Accept"
+            ] = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+            self.__cached_headers = new_headers
+            logging.debug(
                 "Refreshing spoofed headers with User-Agent: %s",
                 self.__cached_headers.get("User-Agent"),
             )
@@ -226,6 +236,8 @@ class ClientBase:
                     method, url, params=params, headers=headers, data=data
                 ) as res:
                     if res.status != 200:
+                        if self.__immediately_stop_not_ok:
+                            raise ResponseNotOkError
                         await backoff.backoff(res.url, res.status)
                         return await do_req()
                     res_val = await res.json() if json else await res.text()
@@ -270,5 +282,8 @@ class ClientBase:
             return (True, await self.match_game(game), None)
         except NotImplementedError:
             raise
+        except ResponseNotOkError:
+            if self.__immediately_stop_not_ok:
+                raise
         except Exception as exc:
             return (False, None, "\n".join(traceback.format_exception(exc)))

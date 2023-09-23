@@ -10,7 +10,7 @@ class GenreCategory:
         self.id = id
 
     def __str__(self) -> str:
-        return str({"name": self.name, "id": self.id})
+        return str(self.__dict__)
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -31,14 +31,7 @@ class Genre:
         self.description = description
 
     def __str__(self) -> str:
-        return str(
-            {
-                "category": self.category,
-                "id": self.id,
-                "description": self.description,
-                "name": self.name,
-            }
-        )
+        return str(self.__dict__)
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -55,7 +48,7 @@ class Group:
         self.name = name
 
     def __str__(self) -> str:
-        return str({"description": self.description, "id": self.id, "name": self.name})
+        return str(self.__dict__)
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -70,7 +63,7 @@ class Platform:
         self.name = name
 
     def __str__(self) -> str:
-        return str({"id": self.id, "name": self.name})
+        return str(self.__dict__)
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -85,7 +78,7 @@ class AlternateTitle:
         self.title = title
 
     def __str__(self) -> str:
-        return str({"description": self.description, "title": self.title})
+        return str(self.__dict__)
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -96,9 +89,7 @@ class GamePlatform(NamedTuple):
     first_release_date: str
 
     def __str__(self) -> str:
-        return str(
-            {"platform": self.platform, "first_release_date": self.first_release_date}
-        )
+        return str(self.__dict__)
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -126,15 +117,7 @@ class Cover:
         self.width = width
 
     def __str__(self) -> str:
-        return str(
-            {
-                "height": self.height,
-                "image_url": self.image_url,
-                "platforms": self.platforms,
-                "thumbnail_image_url": self.thumbnail_image_url,
-                "width": self.width,
-            }
-        )
+        return str(self.__dict__)
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -162,15 +145,7 @@ class Screenshot:
         self.width = width
 
     def __str__(self) -> str:
-        return str(
-            {
-                "caption": self.caption,
-                "height": self.height,
-                "image_url": self.image_url,
-                "thumbnail_image_url": self.thumbnail_image_url,
-                "width": self.width,
-            }
-        )
+        return str(self.__dict__)
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -219,21 +194,7 @@ class Game:
         self.title = title
 
     def __str__(self) -> str:
-        return str(
-            {
-                "alternate_titles": self.alternate_titles,
-                "description": self.description,
-                "id": self.id,
-                "genres": self.genres,
-                "moby_score": self.moby_score,
-                "moby_url": self.moby_url,
-                "official_url": self.official_url,
-                "platforms": self.platforms,
-                "sample_cover": self.sample_cover,
-                "sample_screenshots": self.sample_screenshots,
-                "title": self.title,
-            }
-        )
+        return str(self.__dict__)
 
     def __repr__(self) -> str:
         return self.__str__()

@@ -63,11 +63,11 @@ class MetacriticClient(ClientBase):
 
     def __init__(self, validator: MatchValidator, config: Config = None):
         config = config or Config.create()
-        super().__init__(validator, config, RateLimit(30, DatePart.MINUTE))
+        super().__init__(validator, config, RateLimit(4, DatePart.SECOND))
 
     async def search(self, game: str, offset: int = 0, limit: int = 30) -> dict:
         return await self.get(
-            f"{self.__BASE_FANDOM_METACRITIC_URL}/search/{urllib.parse.quote(game.replace('/', ''))}/web",
+            f"{self.__BASE_FANDOM_METACRITIC_URL}/search/{urllib.parse.quote(str(game).replace('/', ''))}/web",
             params={
                 "apiKey": self.__API_KEY,
                 "offset": offset,
@@ -209,6 +209,9 @@ class MetacriticClient(ClientBase):
             return []
 
         await get_matches_from_search_results(results["data"]["items"])
+
+        if any(m.is_guaranteed_match() for m in matches):
+            return matches
 
         while not any(matches) and results["data"]["totalResults"] > offset + page_size:
             offset += page_size

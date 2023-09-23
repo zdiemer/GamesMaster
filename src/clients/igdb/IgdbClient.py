@@ -90,6 +90,9 @@ class IgdbClient(ClientBase):
         matches: List[GameMatch] = []
 
         for res in results:
+            if any(m.is_guaranteed_match() for m in matches):
+                break
+
             platforms = res.get("platforms") or []
 
             platforms_processed = [self.__platforms[p] for p in platforms]
@@ -115,7 +118,7 @@ class IgdbClient(ClientBase):
                 game, res.get("name"), platforms_processed, release_years
             )
 
-            if match.likely_match:
+            if match.likely_match or (match.matched and not any(platforms_processed)):
                 matches.append(
                     GameMatch(res["name"], res["url"], res["id"], res, match)
                 )
@@ -132,9 +135,12 @@ class IgdbClient(ClientBase):
                         game, names[0].get("name"), platforms_processed, release_years
                     )
 
-                    if match.likely_match:
+                    if match.likely_match or (
+                        match.matched and not any(platforms_processed)
+                    ):
                         matches.append(
                             GameMatch(res["name"], res["url"], res["id"], res, match)
                         )
+                        break
 
         return matches
