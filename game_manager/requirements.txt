@@ -5,3 +5,4 @@ djangorestframework
 django-cors-headers
 minio
 requests
+Pillow

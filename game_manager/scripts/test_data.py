@@ -1,3 +1,8 @@
+from PIL import Image
+import uuid
+from minio import Minio
+import os
+
 from backend.models import (
     Game,
     Genre,
@@ -28,6 +33,7 @@ def run():
     games = [
         {
             "title": "BioShock",
+            "cover_art_filepath": "/code/scripts_data/bioshock_cover.jpg",
             "genres": ["First-Person Shooter", "SystemShock-Like"],
             "franchises": ["BioShock"],
             "developers": ["2K Boston", "2K Australia"],
@@ -83,6 +89,7 @@ def run():
         },
         {
             "title": "BioShock 2",
+            "cover_art_filepath": "/code/scripts_data/bioshock2_cover.jpg",
             "genres": ["First-Person Shooter", "SystemShock-Like"],
             "franchises": ["BioShock"],
             "developers": ["2K Marin"],
@@ -146,6 +153,7 @@ def run():
         },
         {
             "title": "BioShock Infinite",
+            "cover_art_filepath": "/code/scripts_data/bioshockinfinite_cover.jpg",
             "genres": ["First-Person Shooter", "SystemShock-Like"],
             "franchises": ["BioShock"],
             "developers": ["Irrational Games"],
@@ -167,6 +175,7 @@ def run():
         },
         {
             "title": "BioShock: The Collection",
+            "cover_art_filepath": "/code/scripts_data/bioshockthecollection_cover.jpg",
             "genres": ["First-Person Shooter", "SystemShock-Like"],
             "franchises": ["BioShock"],
             "developers": ["Blind Squirrel Games"],
@@ -184,8 +193,35 @@ def run():
         },
     ]
 
+    minioClient = Minio(
+        "minio:9000",
+        access_key=os.environ.get("MINIO_ROOT_USER"),
+        secret_key=os.environ.get("MINIO_ROOT_PASSWORD"),
+        secure=False,
+    )
+    bucket_name = os.environ.get("MINIO_DEFAULT_BUCKET")
+
     for g in games:
-        dbg = Game(title=g["title"])
+        # Upload cover art to minio
+
+        cover_art_uuid = "0000" # default art placeholder.
+
+        if "cover_art_filepath" in g:
+            minio_id = str(uuid.uuid4())
+
+            
+
+            result = minioClient.fput_object(
+                bucket_name, minio_id, g["cover_art_filepath"],
+            )
+            print(
+                "created {0} object; etag: {1}, version-id: {2}".format(
+                    result.object_name, result.etag, result.version_id,
+                ),
+            )
+            cover_art_uuid = minio_id
+
+        dbg = Game(title=g["title"], cover_art_uuid=cover_art_uuid)
         dbg.save()
 
         for genre in g["genres"]:

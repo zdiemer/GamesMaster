@@ -5,6 +5,8 @@ from rest_framework import viewsets, permissions, status, generics
 from django.contrib.postgres.aggregates import ArrayAgg
 from minio import Minio
 import os 
+from PIL import Image
+import io
 
 from .serializers import GenreSerializer, CompanySerializer, ModeSerializer, PlatformSerializer, GameListSerializer, GameDetailSerializer, ReleaseSerializer
 from .models import Game, Release, Platform, Genre, NotableDeveloper, Purchase, Company, Mode
@@ -28,15 +30,19 @@ def serveImage(request, image_id):
         image_id,
     )
     data = response.data
-    # except:
-    #     return HttpResponse(f"failed to fetch") 
-    # finally:
-    #     response.close()
-    #     response.release_conn()
+    im = Image.open(io.BytesIO(data))
+    s = im.size
+    # take in the height as a param.
+    ratio = 200/s[1]
+    newimg = im.resize((int(s[0]*ratio), int(s[1]*ratio)), Image.Resampling.LANCZOS)
+    
     if data == None:
         return HttpResponse(f"failed to fetch")
     else:
-        return HttpResponse(data, content_type="image/png")
+        img_byte_arr = io.BytesIO()
+        newimg.save(img_byte_arr, format='PNG')
+        img_byte_arr = img_byte_arr.getvalue()
+        return HttpResponse(img_byte_arr, content_type="image/png")
 
 
 def index(request):

@@ -75,7 +75,7 @@ export default function Games() {
         <Link href={`/games`}>← back</Link>
         <h1>{gameData?.title}</h1>
         {/* // TODO: exterkamp - use real art for the games. */}
-        <img src="/images/0000" width="200"></img>
+        <img src={`/images/${gameData?.cover_art_uuid}`} height={200}></img>
         <div>
           <p>
             Franchise: <span>{gameData?.franchises.join(", ")}</span>

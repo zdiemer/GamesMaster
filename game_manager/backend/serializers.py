@@ -118,6 +118,7 @@ class GameDetailSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "title",
+            "cover_art_uuid",
             "genres",
             "developers",
             "modes",

@@ -53,6 +53,8 @@ class Franchise(models.Model):
 
 class Game(models.Model):
     title = models.CharField(max_length=200)
+    # UUIDv4 to a minio image.
+    cover_art_uuid = models.CharField(max_length=36)
     # If a game has been ported to a new engine, a new game entry should be created.
     engine = models.CharField(max_length=200)
     genres = models.ManyToManyField(Genre)
