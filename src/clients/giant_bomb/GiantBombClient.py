@@ -64,27 +64,10 @@ class GiantBombClient(ClientBase):
             "search/", params={"query": query, "resources": "game"}
         )
 
-    async def get_release_years(self, guid: str, platform: str) -> List[int]:
-        results = await self.game(guid)
-
-        if results.get("number_of_total_results") != 1:
-            return []
-
-        game = results["results"]
+    async def get_release_years(self, game_id: int, platform: str) -> List[int]:
         years = []
 
-        if (
-            game.get("original_release_date") is None
-            and game.get("expected_release_year") is not None
-        ):
-            years.append(game["expected_release_year"])
-
-        if game.get("original_release_date") is not None:
-            years.append(
-                datetime.strptime(game["original_release_date"], "%Y-%m-%d").year
-            )
-
-        releases = await self.releases(game["id"])
+        releases = await self.releases(game_id)
 
         for release in releases.get("results") or []:
             release_platform = (release.get("platform") or {}).get("name")
@@ -108,17 +91,34 @@ class GiantBombClient(ClientBase):
         matches: List[GameMatch] = []
 
         for res in results["results"]:
+            if any(m.is_guaranteed_match() for m in matches):
+                break
+
             if res.get("platforms") is None:
                 continue
 
             platforms = [p["name"] for p in res["platforms"]]
-            match = self.validator.validate(game, res["name"], platforms)
+            years = []
+
+            if (
+                res.get("original_release_date") is None
+                and res.get("expected_release_year") is not None
+            ):
+                years.append(res["expected_release_year"])
+
+            if res.get("original_release_date") is not None:
+                years.append(
+                    datetime.strptime(res["original_release_date"], "%Y-%m-%d").year
+                )
+
+            match = self.validator.validate(game, res["name"], platforms, years)
 
             if match.likely_match:
-                match.date_matched = self.validator.verify_release_year(
-                    game.release_year,
-                    await self.get_release_years(res["guid"], game.platform),
-                )
+                if not match.date_matched:
+                    match.date_matched = self.validator.verify_release_year(
+                        game.release_year,
+                        await self.get_release_years(res["id"], game.platform),
+                    )
 
                 matches.append(
                     GameMatch(
@@ -126,25 +126,24 @@ class GiantBombClient(ClientBase):
                     ),
                 )
             elif res.get("aliases") is not None:
-                if any(
-                    match.likely_match
-                    for match in [
-                        self.validator.validate(game, alias, platforms)
-                        for alias in res["aliases"].split("\n")
-                    ]
-                ):
-                    match.date_matched = self.validator.verify_release_year(
-                        game.release_year,
-                        await self.get_release_years(res["guid"], game.platform),
-                    )
+                for alias in res["aliases"].split("\n"):
+                    match = self.validator.validate(game, alias, platforms, years)
 
-                    matches.append(
-                        GameMatch(
-                            res["name"],
-                            res["site_detail_url"],
-                            res["guid"],
-                            res,
-                            match,
-                        ),
-                    )
+                    if match.likely_match:
+                        if not match.date_matched:
+                            match.date_matched = self.validator.verify_release_year(
+                                game.release_year,
+                                await self.get_release_years(res["id"], game.platform),
+                            )
+
+                        matches.append(
+                            GameMatch(
+                                res["name"],
+                                res["site_detail_url"],
+                                res["guid"],
+                                res,
+                                match,
+                            ),
+                        )
+                        break
         return matches

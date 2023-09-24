@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List
 
-from bs4 import BeautifulSoup, ResultSet
+from bs4 import BeautifulSoup, element, ResultSet
 
 from clients import ClientBase, DatePart, RateLimit
 from config import Config
@@ -130,7 +130,11 @@ class GameFaqsClient(ClientBase):
     def __init__(self, validator: MatchValidator, config: Config = None):
         config = config or Config.create()
         super().__init__(
-            validator, config, RateLimit(2, DatePart.MINUTE), spoof_headers=True
+            validator,
+            config,
+            RateLimit(1, DatePart.MINUTE),
+            spoof_headers=True,
+            immediately_stop_not_ok=True,
         )
 
     async def _make_request(
@@ -164,12 +168,12 @@ class GameFaqsClient(ClientBase):
         html = await self.guides_page(url)
 
         soup = BeautifulSoup(html, "html.parser")
-        guide_sections = (
+        guide_sections: List[element.Tag] = (
             soup.find_all("ol", {"class": "list flex col1 stripe guides gf_guides"})
             or []
         )
 
-        guide_elems = []
+        guide_elems: List[element.Tag] = []
         guides: List[GameFaqsGuide] = []
 
         for section in guide_sections:
@@ -182,17 +186,17 @@ class GameFaqsClient(ClientBase):
 
             title_elem = guide.find_next("div", {"class": "float_l"})
             if title_elem is not None:
-                gf_guide.title = title_elem.a.text.strip()
+                gf_guide.title = str(title_elem.a.text).strip()
                 gf_guide.url = f'{self.__BASE_GAMEFAQS_URL}{title_elem.a["href"]}'
 
-                gf_guide.author_name = title_elem.span.a.text.strip()
+                gf_guide.author_name = str(title_elem.span.a.text).strip()
                 gf_guide.author_url = (
                     f'{self.__BASE_GAMEFAQS_URL}{title_elem.span.a["href"]}'
                 )
 
-                flair_elem = guide.find_next("span", {"class": "flair"})
+                flair_elem = title_elem.find_next_sibling("span", {"class": "flair"})
                 if flair_elem is not None:
-                    gf_guide.html = flair_elem.text.strip() == "HTML"
+                    gf_guide.html = str(flair_elem.text).strip() == "HTML"
 
             version_elem = guide.find_next("div", {"class": "meta float_r"})
             if version_elem is not None:
@@ -215,7 +219,7 @@ class GameFaqsClient(ClientBase):
                 elif accolade.startswith("*FAQ of the Month Winner:"):
                     gf_guide.faq_of_the_month_winner = True
                     faq_of_the_month = datetime.strptime(
-                        accolade.split(":")[1].strip(), "%B %y"
+                        accolade.split(":")[1].strip(), "%B %Y*"
                     )
                     gf_guide.faq_of_the_month_month = datetime.strftime(
                         faq_of_the_month.month, "%B"
@@ -229,7 +233,7 @@ class GameFaqsClient(ClientBase):
             ):
                 game_guide = await self.get(gf_guide.url, json=False)
                 soup = BeautifulSoup(game_guide, "html.parser")
-                guide_contents = soup.find_next("div", {"id": "faqwrap"})
+                guide_contents = soup.find("div", {"id": "faqtext"})
 
                 if guide_contents is not None:
                     gf_guide.full_text = guide_contents.get_text(" ").strip()
@@ -260,9 +264,11 @@ class GameFaqsClient(ClientBase):
         for i in infos:
             label = i.b.text.strip()
             if label == "Platform:":
-                gf_game.platform = GameFaqsPlatform(i.a.text.strip())
+                gf_game.platform = GameFaqsPlatform(str(i.a.text).strip())
             elif label == "Genre:":
-                genre_parts = [GameFaqsGenre(g.text.strip()) for g in i.find_all("a")]
+                genre_parts = [
+                    GameFaqsGenre(str(g.text).strip()) for g in i.find_all("a")
+                ]
                 idx = len(genre_parts) - 1
                 while idx > 0:
                     genre_parts[idx].parent_genre = genre_parts[idx - 1]
@@ -270,10 +276,15 @@ class GameFaqsClient(ClientBase):
                 gf_game.genre = genre_parts[-1]
             elif label == "Franchises:":
                 gf_game.franchises = [
-                    GameFaqsFranchise(f.text.strip()) for f in i.find_all("a")
+                    GameFaqsFranchise(str(f.text).strip()) for f in i.find_all("a")
                 ]
             elif label in ["Developer:", "Developer/Publisher:"]:
-                gf_game.developer = GameFaqsCompany(i.a.text.strip())
+                gf_game.developer = GameFaqsCompany(str(i.a.text).strip())
+            elif label == "Also Known As:":
+                aliases = str(i.i.text).split("•")
+                gf_game.aliases = [
+                    re.sub(r" \(.*\)", "", alias).strip() for alias in aliases
+                ]
 
         rating_child = soup.find(id="gs_rate_avg")
         if rating_child is not None:
@@ -367,35 +378,40 @@ class GameFaqsClient(ClientBase):
         return gf_game
 
     async def match_game(self, game: ExcelGame) -> List[GameMatch]:
-        self._rate_limiter.settings = RateLimit(random.randint(1, 5), DatePart.MINUTE)
+        self._rate_limiter.settings = RateLimit(random.randint(20, 100), DatePart.HOUR)
         results = await self.home_game_search(game.title)
         matches: List[GameMatch] = []
 
         for res in results:
+            if any(m.is_guaranteed_match() for m in matches):
+                break
+
             if res.get("footer"):
                 continue
             if res.get("game_name") and res.get("plats"):
                 match = self.validator.validate(
-                    game, res["game_name"], res["plats"].split(", ")
+                    game,
+                    res["game_name"],
+                    res["plats"].split(", "),
+                    [datetime.strptime(res["date_released"], "%Y-%m-%d").year],
                 )
 
                 if match.likely_match:
                     gf_game = await self.get_gamefaqs_game(res, game.platform)
 
-                    releases_match = self.validator.verify_release_year(
-                        game.release_year,
-                        [
-                            rel.release_year
-                            for rel in filter(
-                                # Filter unreleased games
-                                lambda _rel: _rel.status
-                                == GameFaqsReleaseStatus.RELEASED,
-                                gf_game.releases,
-                            )
-                        ],
-                    )
-
-                    match.date_matched = releases_match
+                    if not match.date_matched:
+                        match.date_matched = self.validator.verify_release_year(
+                            game.release_year,
+                            [
+                                rel.release_year
+                                for rel in filter(
+                                    # Filter unreleased games
+                                    lambda _rel: _rel.status
+                                    == GameFaqsReleaseStatus.RELEASED,
+                                    gf_game.releases,
+                                )
+                            ],
+                        )
 
                     matches.append(
                         GameMatch(

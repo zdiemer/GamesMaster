@@ -14,7 +14,8 @@ import asyncio
 import logging
 import sys
 import traceback
-from typing import Dict, List, Optional, Type, Set
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Type, Set
 
 import jsonpickle
 import pandas as pd
@@ -23,7 +24,7 @@ from steam import Steam
 
 import clients
 from config import Config
-from game_match import DataSource, GameMatch, GameMatchResult
+from game_match import DataSource, GameMatch, GameMatchResult, GameMatchResultSet
 from excel_game import ExcelGame, ExcelRegion as Region
 from match_validator import MatchValidator
 
@@ -77,6 +78,8 @@ class SteamWrapper(clients.ClientBase):
 
         for res in results["apps"]:
             match = self.validator.validate(game, res["name"])
+            match.platform_matched = True
+            match.date_matched = True
             if match.matched:
                 matches.append(
                     GameMatch(res["name"], res["link"], res["id"], res, match)
@@ -198,7 +201,7 @@ class ExcelParser:
         self.__validator = MatchValidator()
         logging.basicConfig(
             stream=sys.stdout,
-            level=logging.INFO,
+            level=logging.DEBUG,
             format="%(levelname)s %(asctime)s - %(message)s",
             datefmt="%y-%m-%d %I:%M:%S %p",
         )
@@ -209,9 +212,24 @@ class ExcelParser:
             "static/games.xlsx", sheet_name=sheet, keep_default_na=False
         )
 
+    def row_to_game(self, row: pd.Series) -> ExcelGame:
+        return ExcelGame(
+            row["Id"],
+            row["Title"],
+            row["Platform"],
+            row["Release Date"] if row["Release Date"] != "Early Access" else None,
+            Region(row["Release Region"]),
+            row["Publisher"],
+            row["Developer"],
+            row["Franchise"],
+            row["Genre"],
+            row["Notes"],
+            row["Format"],
+        )
+
     async def get_matches_for_source(
         self, source: DataSource, games_override: Optional[pd.DataFrame] = None
-    ) -> List[GameMatchResult]:
+    ) -> GameMatchResultSet:
         """Fetches matches for the games property for a given source.
 
         This method will loop through all the rows of the games object and
@@ -224,36 +242,47 @@ class ExcelParser:
         Returns:
             A dictionary mapping of game ID (from the pandas.DataFrame) to a list of GameMatches
         """
-        results: List[GameMatchResult] = []
+        results = GameMatchResultSet()
         if source not in self.enabled_clients:
-            return []
+            return results
+
         client = self._ALL_CLIENTS[source](self.__validator, self.config)
         games = games_override if games_override is not None else self.games
+
         row_count, _ = games.shape
+        processed_count = 0
+        start = datetime.utcnow()
+        last_log = datetime.utcnow() - timedelta(seconds=5)
+
+        def as_cyan(s: str) -> str:
+            return f"\033[96m{s}\033[00m"
+
+        def as_purple(s: str) -> str:
+            return f"\033[95m{s}\033[00m"
+
+        def as_green(s: str) -> str:
+            return f"\033[92m{s}\033[00m"
+
+        def as_red(s: str) -> str:
+            return f"\033[91m{s}\033[00m"
+
         for _, row in games.iterrows():
-            game = ExcelGame(
-                row["Id"],
-                row["Title"],
-                row["Platform"],
-                row["Release Date"] if row["Release Date"] != "Early Access" else None,
-                Region(row["Release Region"]),
-                row["Publisher"],
-                row["Developer"],
-                row["Franchise"],
-                row["Genre"],
-                row["Notes"],
-                row["Format"],
-            )
+            game = self.row_to_game(row)
 
             success, game_matches, exc = await client.try_match_game(game)
+            processed_count += 1
 
-            results.append(GameMatchResult(game, success, game_matches, exc))
+            if success and game_matches is not None:
+                gmr = GameMatchResult(game, self.filter_matches(game_matches))
+                results.successes.append(gmr)
 
             if not success:
+                results.errors.append(GameMatchResult(game, error=exc))
                 continue
 
             if game_matches is None:
                 # Game was skipped due to should_skip, no need to log process
+                results.skipped.append(GameMatchResult(game))
                 continue
 
             match_string = (
@@ -261,18 +290,85 @@ class ExcelParser:
                 f"{'es' if len(game_matches) != 1 else ''}"
             )
 
-            logging.info(
-                "%s: Processed %s - %s - %s/%s (%s%%)",
-                source,
-                game.full_name,
-                match_string,
-                len(results),
-                row_count,
-                f"{(len(results)/row_count)*100:,.2f}",
+            row_time = datetime.utcnow()
+            elapsed = row_time - start
+            estimated_s = (row_count - processed_count) * (
+                elapsed.total_seconds() / processed_count
+            )
+            estimated = timedelta(seconds=estimated_s)
+
+            if last_log <= datetime.utcnow() - timedelta(seconds=5):
+                logging.info(
+                    (
+                        "%s: Processed %s - %s - %s/%s (%s%%), "
+                        "Elapsed: %s, Estimated Time Remaining: %s"
+                    ),
+                    as_cyan(source),
+                    as_purple(game.full_name),
+                    match_string,
+                    processed_count,
+                    row_count,
+                    f"{(processed_count/row_count)*100:,.2f}",
+                    as_green(str(elapsed)),
+                    as_red(str(estimated)),
+                )
+
+        logging.info(
+            "%s: Finished processing all rows, Total Elapsed: %s",
+            as_cyan(source),
+            as_green(str(datetime.utcnow() - start)),
+        )
+        return results
+
+    def filter_matches(
+        self,
+        matches: List[GameMatch],
+    ) -> List[GameMatch]:
+        if len(matches) > 1:
+
+            def filter_full_matches(mats: List[GameMatch]) -> List[GameMatch]:
+                return list(
+                    filter(
+                        lambda m: m.validation_info is not None
+                        and m.validation_info.full_match,
+                        mats,
+                    )
+                )
+
+            filtered_matches = matches
+
+            exact_matches = list(
+                filter(
+                    lambda m: m.validation_info is not None and m.validation_info.exact,
+                    matches,
+                )
             )
 
-        logging.info("%s: Finished processing all rows", source)
-        return results
+            if len(exact_matches) > 1:
+                filtered_matches = exact_matches
+
+                full_matches = filter_full_matches(exact_matches)
+
+                if len(full_matches) > 1:
+                    filtered_matches = full_matches
+                elif len(full_matches) == 1:
+                    return [full_matches[0]]
+            elif len(exact_matches) == 1:
+                return [exact_matches[0]]
+            else:
+                full_matches = filter_full_matches(exact_matches)
+
+                if len(full_matches) > 1:
+                    filtered_matches = full_matches
+                elif len(full_matches) == 1:
+                    return [full_matches[0]]
+
+            return filtered_matches
+
+        if len(matches) == 1:
+            return [matches[0]]
+
+        return matches
 
     def get_match_option_selection(
         self,
@@ -290,6 +386,9 @@ class ExcelParser:
             source: A DataSource to get a selection about
             game: An ExcelGame corresponding to the row in question
             options: A list of GameMatches to deduplicate
+
+        Returns:
+            The array location selection.
         """
         print(f"\nMultiple matches from {source.name} detected:\n")
         max_i = 0
@@ -299,7 +398,7 @@ class ExcelParser:
             print(f"{i+1}. {option.title}{url}{option_id}")
             max_i = i + 1
         print(f"{max_i+1}. None of the above")
-        val = input(f"Pick which option best matches {game.full_name}]: ")
+        val = input(f"Pick which option best matches {game.full_name}: ")
         while not str.isdigit(val) or int(val) < 1 or int(val) > len(options) + 1:
             val = input("Invalid selection, please select from the above list: ")
         return int(val) - 1
@@ -309,7 +408,7 @@ class ExcelParser:
         game: ExcelGame,
         matches: List[GameMatch],
         source: DataSource,
-    ) -> GameMatch:
+    ) -> Tuple[bool, Optional[GameMatch]]:
         """Fetch a single match from multiple matches for a single source.
 
         This method wraps the get_match_option_selection method in an attempt to
@@ -321,65 +420,47 @@ class ExcelParser:
             game: An ExcelGame to deduplicate matches for
             matches: A list of GameMatches to deduplicate
             source: A DataSource to deduplicate matches for
+
+        Returns:
+            The match selected or None if none of the above is selected.
         """
         if len(matches) > 1:
-
-            def filter_full_matches(mats: List[GameMatch]) -> List[GameMatch]:
-                return list(
-                    filter(
-                        lambda m: m.validation_info is not None
-                        and m.validation_info.full_match,
-                        mats,
-                    )
-                )
-
-            match_options = matches
-
-            exact_matches = list(
-                filter(
-                    lambda m: m.validation_info is not None and m.validation_info.exact,
-                    matches,
-                )
-            )
-
-            if len(exact_matches) > 1:
-                match_options = exact_matches
-
-                full_matches = filter_full_matches(exact_matches)
-
-                if len(full_matches) > 1:
-                    match_options = full_matches
-                elif len(full_matches) == 1:
-                    return full_matches[0]
-            elif len(exact_matches) == 1:
-                return exact_matches[0]
-            else:
-                full_matches = filter_full_matches(exact_matches)
-
-                if len(full_matches) > 1:
-                    match_options = full_matches
-                elif len(full_matches) == 1:
-                    return full_matches[0]
-
             selection = self.get_match_option_selection(
                 source,
                 game,
-                match_options,
+                matches,
             )
 
-            if selection > len(match_options):
-                return None
+            if selection >= len(matches):
+                return (True, None)
 
-            return match_options[selection]
+            return (True, matches[selection])
 
         if len(matches) == 1:
-            return matches[0]
+            return (False, matches[0])
 
-        return None
+        return (False, None)
 
-    async def match_all_games(
-        self, games_override: Optional[pd.DataFrame] = None
-    ) -> Dict[int, List[GameMatch]]:
+    def confirm_non_full_match(
+        self,
+        source: DataSource,
+        game: ExcelGame,
+        match: GameMatch,
+    ) -> bool:
+        print(f"\nOne non-full match from {source.name} detected.\n")
+
+        url = f" ({match.url})" if match.url is not None else ""
+        option_id = f", ID = {match.id}" if match.id is not None else ""
+        print(f"\t{match.title}{url}{option_id}\n")
+
+        val = input(f"Is this an accurate match for {game.full_name}? (y/n): ")
+
+        while val.lower().strip() not in {"y", "n"}:
+            val = input("Invalid selection, please indicate y/n: ")
+
+        return val.lower().strip() == "y"
+
+    async def match_all_games(self, games_override: Optional[pd.DataFrame] = None):
         """Matches all games against all sources.
 
         This method kicks off an asyncio.Task for each DataSource that's currently
@@ -392,70 +473,85 @@ class ExcelParser:
         Returns:
             A dictionary mapping Excel game IDs to GameMatches
         """
-        tasks: List[asyncio.Task[List[GameMatchResult]]] = [
+        tasks: List[asyncio.Task[GameMatchResultSet]] = [
             asyncio.create_task(
                 self.get_matches_for_source(source, games_override), name=source.name
             )
             for source in self.enabled_clients
         ]
 
-        results: Dict[DataSource, List[GameMatchResult]] = {}
+        results: Dict[DataSource, Dict[int, GameMatch]] = {}
 
-        await asyncio.gather(*tasks, return_exceptions=True)
-        for task in tasks:
-            if task.exception() is not None:
-                results[DataSource[task.get_name()]] = [
-                    GameMatchResult(
-                        None, False, None, traceback.format_exception(task.exception())
-                    )
-                ]
-            results[DataSource[task.get_name()]] = task.result()
+        async def are_all_done(_tasks: List[asyncio.Task[GameMatchResultSet]]) -> bool:
+            await asyncio.sleep(0)
+            return all(t.done() for t in _tasks)
 
-        final_results: Dict[int, List[GameMatch]] = {}
+        processed: List[asyncio.Task[GameMatchResultSet]] = []
 
-        for source, source_matches in results.items():
-            for gmr in source_matches:
-                if gmr.error is not None:
-                    logging.error(
-                        "%s: Exception was thrown for %s - %s",
-                        source,
-                        gmr.game.full_name,
-                        gmr.error,
-                    )
+        while not await are_all_done(tasks):
+            for task in tasks:
+                if task.done() and task not in processed:
+                    source = DataSource[task.get_name()]
+                    if task.exception() is not None:
+                        logging.warning(
+                            "%s: Failed to run due to exception - %s",
+                            source,
+                            traceback.format_exception(task.exception()),
+                        )
+                        continue
 
-                game_id = gmr.game.id
-                gmr_match: Optional[GameMatch] = None
+                    result_set = task.result()
 
-                if len(gmr.matches) > 1:
-                    gmr_match = self.get_match_from_multiple_matches(
-                        gmr.game, gmr.matches, source
-                    )
-                elif len(gmr.matches) == 1:
-                    gmr_match = gmr.matches[0]
+                    for gmr in result_set.errors:
+                        logging.error(
+                            "%s: Exception was thrown for %s - %s",
+                            source,
+                            gmr.game.full_name,
+                            gmr.error,
+                        )
 
-                if gmr_match is not None:
-                    gmr_match.source = source
+                    game_dict: Dict[int, GameMatch] = {}
 
-                    if game_id in final_results:
-                        final_results[game_id].append(gmr_match)
-                    else:
-                        final_results[game_id] = [gmr_match]
-                elif game_id not in final_results:
-                    final_results[game_id] = []
+                    for gmr in result_set.successes:
+                        was_user_input, match = self.get_match_from_multiple_matches(
+                            gmr.game, gmr.matches, source
+                        )
 
-        missing_matches: List[int] = [
-            g_id for g_id, g_list in final_results.items() if not any(g_list)
-        ]
+                        if match is not None:
+                            if (
+                                was_user_input
+                                or match.validation_info.full_match
+                                or match.validation_info.exact
+                                or self.confirm_non_full_match(source, gmr.game, match)
+                            ):
+                                game_dict[gmr.game.id] = match
 
-        for missing_game_id in missing_matches:
-            title = parser.games.loc[parser.games["Id"] == missing_game_id].iloc[0][
-                "Title"
-            ]
-            print(f"Missing a match for {title}")
+                    results[source] = game_dict
 
-        with open("static/matches.json", "w", encoding="utf-8") as file:
-            file.write(jsonpickle.encode(final_results))
-        return final_results
+                    with open(
+                        f"static/{source}-matches.json", "w", encoding="utf-8"
+                    ) as file:
+                        file.write(jsonpickle.encode(results[source]))
+
+                    if any(result_set.errors):
+                        with open(
+                            f"static/{source}-errors.json", "w", encoding="utf-8"
+                        ) as file:
+                            file.write(jsonpickle.encode(result_set.errors))
+
+                    processed.append(task)
+
+        games_df = self.games if games_override is None else games_override
+
+        missing_game_ids = set(games_df["Id"].unique().astype(int).tolist()).difference(
+            {g for k in results.values() for g in k.keys()}
+        )
+
+        for game_id in missing_game_ids:
+            row = games_df.loc[games_df["Id"] == game_id].iloc[0]
+            game = self.row_to_game(row)
+
+            print(f"{game.full_name} had no matches across all sources.")
 
 
 if __name__ == "__main__":
@@ -463,7 +559,10 @@ if __name__ == "__main__":
     which_parsers: Optional[List[DataSource]] = []
 
     # Which parsers should not run, empty list means no parsers will be excluded
-    except_parsers: Optional[List[DataSource]] = [DataSource.GAME_FAQS]
+    except_parsers: Optional[List[DataSource]] = [
+        DataSource.GAME_FAQS,
+        DataSource.MOBY_GAMES,
+    ]
 
     parser = ExcelParser(
         set(which_parsers or list(DataSource)).difference(set(except_parsers or []))
@@ -471,6 +570,6 @@ if __name__ == "__main__":
 
     # A DataFrame override to use instead of the entire Excel sheet, e.g. parser.games.sample(5)
     # for a random sample of 5 games. If None, then the entire sheet is used.
-    g_override: Optional[pd.DataFrame] = None
+    g_override: Optional[pd.DataFrame] = parser.games.sample(5)
 
     asyncio.run(parser.match_all_games(g_override))

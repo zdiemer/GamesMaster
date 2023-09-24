@@ -2,7 +2,8 @@
 
 # Static files
 static/config.json
-static/matches.json
+static/*matches.json
+static/*errors.json
 
 # pyenv
 .python-version

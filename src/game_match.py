@@ -37,7 +37,6 @@ class GameMatch:
         id: The ID for a row in the spreadsheet
         title: The matched title
         url: A URL for the match result
-        source: The DataSource corresponding to this match
         match_info: Any additional external match info
         validation_info: Information on how this game matched
     """
@@ -45,7 +44,6 @@ class GameMatch:
     id: Optional[int]
     title: str
     url: Optional[str]
-    source: DataSource
     match_info: Optional[Any]
     validation_info: Optional[ValidationInfo]
 
@@ -64,38 +62,46 @@ class GameMatch:
         self.validation_info = validation_info
 
     def __str__(self) -> str:
-        return str(
-            {
-                "id": self.id,
-                "title": self.title,
-                "url": self.url,
-                "source": self.source,
-                "match_info": self.match_info,
-                "validation_info": self.validation_info,
-            }
-        )
+        return str(self.__dict__)
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
+    def is_guaranteed_match(self):
+        return self.validation_info.exact and self.validation_info.full_match
+
+
+class GameMatchResult:
+    game: Optional[ExcelGame]
+    matches: Optional[List[GameMatch]]
+    error: Optional[str]
+
+    def __init__(
+        self,
+        game: Optional[ExcelGame] = None,
+        matches: Optional[List[GameMatch]] = None,
+        error: Optional[str] = None,
+    ):
+        self.game = game
+        self.matches = matches or []
+        self.error = error
+
+    def __str__(self) -> str:
+        return str(self.__dict__)
 
     def __repr__(self) -> str:
         return self.__str__()
 
 
-class GameMatchResult:
-    game: ExcelGame
-    success: bool
-    matches: Optional[List[GameMatch]] = None
-    error: Optional[str] = None
+class GameMatchResultSet:
+    successes: List[GameMatchResult]
+    errors: List[GameMatchResult]
+    skipped: List[GameMatchResult]
 
-    def __init__(
-        self,
-        game: ExcelGame,
-        success: bool,
-        matches: Optional[List[GameMatch]] = None,
-        error: Optional[str] = None,
-    ):
-        self.game = game
-        self.success = success
-        self.matches = matches or []
-        self.error = error
+    def __init__(self):
+        self.successes = []
+        self.errors = []
+        self.skipped = []
 
     def __str__(self) -> str:
         return str(self.__dict__)

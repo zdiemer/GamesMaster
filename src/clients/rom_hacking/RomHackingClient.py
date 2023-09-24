@@ -189,6 +189,9 @@ class RomHackingClient(ClientBase):
         matches: List[GameMatch] = []
 
         for res in results:
+            if any(m.is_guaranteed_match() for m in matches):
+                break
+
             title = res.find("td", {"class": "col_1"})
             name = title.a.text.strip()
             url = title.a["href"]

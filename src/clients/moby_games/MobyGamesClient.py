@@ -1,14 +1,15 @@
 from __future__ import annotations
 
+import datetime
 import html
 from typing import Dict, List, Literal
 
-from .moby_games_types import *
 from clients import ClientBase, DatePart, RateLimit
 from config import Config
 from excel_game import ExcelGame
 from game_match import GameMatch
 from match_validator import MatchValidator
+from .moby_games_types import *
 
 
 class MobyGamesClient(ClientBase):
@@ -156,38 +157,48 @@ class MobyGamesClient(ClientBase):
             return years
 
         for res in results:
+            if any(m.is_guaranteed_match() for m in matches):
+                break
+
             if res.platforms is None:
                 continue
 
             platform_names = [p.platform.name for p in res.platforms]
+            platform_years = []
             pid = 0
 
             for plat in res.platforms:
                 if self.validator.verify_platform(game.platform, [plat.platform.name]):
                     pid = plat.platform.id
+                    r_date_parts = plat.first_release_date.split("-")
+                    platform_years.append(int(r_date_parts[0]))
 
-            match = self.validator.validate(game, res.title, platform_names)
+            match = self.validator.validate(
+                game, res.title, platform_names, platform_years
+            )
 
             if match.likely_match:
-                match.date_matched = self.validator.verify_release_year(
-                    game.release_year, await get_years(res.id, pid)
-                )
-
-                matches.append(GameMatch(res.title, res.moby_url, res.id, res, match))
-            elif res.alternate_titles is not None:
-                if any(
-                    match.likely_match
-                    for match in [
-                        self.validator.validate(game, alt.title, platform_names)
-                        for alt in res.alternate_titles
-                    ]
-                ):
+                if not match.date_matched:
                     match.date_matched = self.validator.verify_release_year(
                         game.release_year, await get_years(res.id, pid)
                     )
 
-                    matches.append(
-                        GameMatch(res.title, res.moby_url, res.id, res, match)
+                matches.append(GameMatch(res.title, res.moby_url, res.id, res, match))
+            elif res.alternate_titles is not None:
+                for alt in res.alternate_titles:
+                    match = self.validator.validate(
+                        game, alt.title, platform_names, platform_years
                     )
+
+                    if match.likely_match:
+                        if not match.date_matched:
+                            match.date_matched = self.validator.verify_release_year(
+                                game.release_year, await get_years(res.id, pid)
+                            )
+
+                        matches.append(
+                            GameMatch(res.title, res.moby_url, res.id, res, match)
+                        )
+                        break
 
         return matches
