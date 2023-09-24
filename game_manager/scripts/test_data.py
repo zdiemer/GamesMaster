@@ -2,6 +2,7 @@ from PIL import Image
 import uuid
 from minio import Minio
 import os
+import json
 
 from backend.models import (
     Game,
@@ -29,171 +30,12 @@ def run():
     Region.objects.create(
         display_name="Worldwide", short_code="WW"
     )
+    games = []
+    with open('/code/scripts_data/test_data.json', encoding="utf-8") as json_file:
+        games_data = json.load(json_file)
+        games = games_data["games"]
 
-    games = [
-        {
-            "title": "BioShock",
-            "cover_art_filepath": "/code/scripts_data/bioshock_cover.jpg",
-            "genres": ["First-Person Shooter", "SystemShock-Like"],
-            "franchises": ["BioShock"],
-            "developers": ["2K Boston", "2K Australia"],
-            "modes": ["Singleplayer"],
-            "notableDevelopers": [
-                {
-                    "name": "Ken Levine",
-                    "role": "director",
-                },
-                {
-                    "name": "Ken Levine",
-                    "role": "writer",
-                },
-                {
-                    "name": "Garry Schyman",
-                    "role": "composer",
-                },
-            ],
-            "releases": [
-                {
-                    "release_date": "2007-08-21",
-                    "region": "NA",
-                    "publishers": ["2K Games"],
-                    "platforms": ["Xbox 360", "PC"],
-                    "purchases": [
-                        {
-                            "ownership_type": "CO",
-                            "purchase_format": "PL",
-                            "purchase_date": "2007-08-21",
-                            "purchase_price": 59.99
-                        },
-                    ],
-                },
-                {
-                    "release_date": "2007-08-24",
-                    "region": "PAL",
-                    "publishers": ["2K Games"],
-                    "platforms": ["Xbox 360", "PC"],
-                },
-                {
-                    "release_date": "2008-10-21",
-                    "region": "NA",
-                    "publishers": ["2K Games"],
-                    "platforms": ["PS3"],
-                },
-                {
-                    "release_date": "2009-10-01",
-                    "region": "NA",
-                    "publishers": ["Feral Interactive"],
-                    "platforms": ["MacOS"],
-                },
-            ],
-        },
-        {
-            "title": "BioShock 2",
-            "cover_art_filepath": "/code/scripts_data/bioshock2_cover.jpg",
-            "genres": ["First-Person Shooter", "SystemShock-Like"],
-            "franchises": ["BioShock"],
-            "developers": ["2K Marin"],
-            "modes": ["Singleplayer", "Multiplayer"],
-            "notableDevelopers": [
-                {
-                    "name": "Jordan Thomas",
-                    "role": "director",
-                },
-            ],
-            "releases": [
-                {
-                    "release_date": "2010-02-09",
-                    "region": "NA",
-                    "publishers": ["2K Games"],
-                    "platforms": ["Xbox 360", "PC", "PS3"],
-                },
-            ],
-        },
-        {
-            "title": "BioShock 2: Minerva's Den",
-            "genres": ["First-Person Shooter", "SystemShock-Like"],
-            "franchises": ["BioShock"],
-            "developers": ["2K Marin"],
-            "notableDevelopers": [],
-            "modes": ["Singleplayer"],
-            "releases": [
-                {
-                    "release_date": "2010-08-31",
-                    "region": "NA",
-                    "publishers": ["2K Games"],
-                    "platforms": ["Xbox 360", "PS3"],
-                },
-            ],
-            "dlc_of": "BioShock 2",
-        },
-        {
-            "title": "BioShock Infinite: Industrial Revolution",
-            "genres": ["Puzzle"],
-            "franchises": ["BioShock"],
-            "developers": ["Lazy 8 Studios"],
-            "modes": ["Singleplayer"],
-            "notableDevelopers": [
-                {
-                    "name": "Joshua Davis",
-                    "role": "UX Developer",
-                },
-                {
-                    "name": "Jorge Lacera",
-                    "role": "Art Director",
-                },
-            ],
-            "releases": [
-                {
-                    "release_date": "2013-01-24",
-                    "region": "WW",
-                    "publishers": ["2K Games"],
-                    "platforms": ["PC"],
-                },
-            ],
-        },
-        {
-            "title": "BioShock Infinite",
-            "cover_art_filepath": "/code/scripts_data/bioshockinfinite_cover.jpg",
-            "genres": ["First-Person Shooter", "SystemShock-Like"],
-            "franchises": ["BioShock"],
-            "developers": ["Irrational Games"],
-            "modes": ["Singleplayer"],
-            "notableDevelopers": [
-                {
-                    "name": "Ken Levine",
-                    "role": "director",
-                },
-            ],
-            "releases": [
-                {
-                    "release_date": "2013-03-26",
-                    "region": "NA",
-                    "publishers": ["2K Games"],
-                    "platforms": ["Xbox 360", "PC", "PS3"],
-                },
-            ],
-        },
-        {
-            "title": "BioShock: The Collection",
-            "cover_art_filepath": "/code/scripts_data/bioshockthecollection_cover.jpg",
-            "genres": ["First-Person Shooter", "SystemShock-Like"],
-            "franchises": ["BioShock"],
-            "developers": ["Blind Squirrel Games"],
-            "notableDevelopers": [],
-            "modes": ["Singleplayer"],
-            "releases": [
-                {
-                    "release_date": "2016-09-13",
-                    "region": "NA",
-                    "publishers": ["2K Games"],
-                    "platforms": ["Xbox 360", "PS3"],
-                },
-            ],
-            "collection_of": ["BioShock", "BioShock 2", "BioShock Infinite"],
-        },
-    ]
-
-    minioClient = Minio(
+    minio_client = Minio(
         "minio:9000",
         access_key=os.environ.get("MINIO_ROOT_USER"),
         secret_key=os.environ.get("MINIO_ROOT_PASSWORD"),
@@ -211,7 +53,7 @@ def run():
 
             
 
-            result = minioClient.fput_object(
+            result = minio_client.fput_object(
                 bucket_name, minio_id, g["cover_art_filepath"],
             )
             print(
