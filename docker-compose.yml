@@ -1,0 +1,93 @@
+name: games-master
+services:
+  web:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "${WEB_PORT}:80"
+    depends_on:
+      - backend
+      - nextapp
+    networks:
+      - frontend
+  db:
+    image: postgres
+    volumes:
+      - database_volume:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    networks:
+      - backend
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    hostname: minio
+    ports:
+      - "50300:9000"
+      - "50400:9001"
+    environment:
+      - MINIO_DEFAULT_BUCKET=${MINIO_DEFAULT_BUCKET}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      # - MINIO_SITE_REGION=${REGION:-us-east-1}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    volumes:
+      - minio_volume:/data
+    networks:
+      - backend
+  backend:
+    build:
+      context: ./game_manager
+      dockerfile: Dockerfile
+    command: python manage.py runserver 0.0.0.0:${API_INTERNAL_PORT}
+    volumes:
+      - ./game_manager:/code
+    ports:
+      - "${API_PORT}:${API_INTERNAL_PORT}"
+    environment:
+      - POSTGRES_NAME=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_DEFAULT_BUCKET=${MINIO_DEFAULT_BUCKET}
+    depends_on:
+      - db
+      - minio
+    healthcheck:
+      test: curl --fail http://localhost:${API_INTERNAL_PORT}/healthz || exit 1
+      interval: 10s
+      retries: 5
+      start_period: 5s
+      timeout: 10s
+    networks:
+      - backend
+      - frontend
+  nextapp:
+    container_name: next-app
+    build:
+      context: ./game_frontend
+      dockerfile: dev.Dockerfile
+    volumes:
+      - ./game_frontend/src:/app/src
+      - ./game_frontend/public:/app/public
+    restart: always
+    ports:
+      - 3000:3000
+    networks:
+      - backend
+      - frontend
+volumes:
+  database_volume:
+  minio_volume:
+networks:
+  backend:
+  frontend:

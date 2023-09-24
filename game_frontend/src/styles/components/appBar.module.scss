@@ -1,0 +1,32 @@
+@use '../variables';
+
+.bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    background-color: palegreen;
+    top: 0;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    min-width: variables.$main-content-min-width;
+    box-shadow: rgba(0, 0, 0, 0.1) 0px 10px 15px -3px, rgba(0, 0, 0, 0.05) 0px 4px 6px -2px;
+}
+
+.verticalContainer {
+    position: relative;
+    flex-grow: 1;
+}
+
+.spacer {
+    height: 64px;
+}
+
+.title {
+    text-align: center;
+}
+
+.homeLink {
+    position: absolute;
+    left: 0;
+}
