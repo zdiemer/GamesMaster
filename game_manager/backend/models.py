@@ -1,5 +1,5 @@
 from django.db import models
-
+import uuid
 
 class Genre(models.Model):
     name = models.CharField(max_length=200)
@@ -53,6 +53,7 @@ class Franchise(models.Model):
 
 class Game(models.Model):
     title = models.CharField(max_length=200)
+    url_slug = models.CharField(max_length=200, unique=True)
     # UUIDv4 to a minio image.
     cover_art_uuid = models.CharField(max_length=36)
     # If a game has been ported to a new engine, a new game entry should be created.

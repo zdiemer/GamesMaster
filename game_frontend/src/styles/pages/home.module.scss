@@ -1,5 +1,15 @@
 .container {
-    display: grid;
-    gap: 8px;
-    grid-template-columns: 1fr 1fr 1fr;
+    display: flex;
+    flex-direction: column;
+    margin-left: 20px;
+    padding: 8px 0;
+
+    & a {
+        // text-decoration: none;
+        color: inherit;
+    }
+
+    & a:not(:first-child) {
+        padding-top: 8px;
+    }
 }

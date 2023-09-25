@@ -66,7 +66,7 @@ class GameListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Game
         fields = [
-            "id",
+            "url_slug",
             "title",
             "genres",
             "developers",
@@ -89,7 +89,7 @@ class NestedGameSerializer(serializers.ModelSerializer):
     class Meta:
         model = Game
         fields = [
-            "id",
+            "url_slug",
             "title",
             "genres",
             "developers",
@@ -116,7 +116,7 @@ class GameDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Game
         fields = [
-            "id",
+            "url_slug",
             "title",
             "cover_art_uuid",
             "genres",

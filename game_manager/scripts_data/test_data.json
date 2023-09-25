@@ -55,6 +55,36 @@
             ]
         },
         {
+            "title": "System Shock: Enhanced Edition",
+            "genres": ["First-Person Shooter", "Action", "Adventure"],
+            "franchises": ["System Shock"],
+            "developers": ["LookingGlass Technologies, Inc.", "Nightdive Studios"],
+            "modes": ["Singleplayer"],
+            "releases": [
+                {
+                    "release_date": "2015-09-22",
+                    "region": "NA",
+                    "publishers": ["Nightdive Studios"],
+                    "platforms": ["PC"]
+                }
+            ]
+        },
+        {
+            "title": "System Shock (Remake)",
+            "genres": ["First-Person Shooter", "Action", "Adventure"],
+            "franchises": ["System Shock"],
+            "developers": ["Nightdive Studios"],
+            "modes": ["Singleplayer"],
+            "releases": [
+                {
+                    "release_date": "2023-05-30",
+                    "region": "NA",
+                    "publishers": ["Prime Matter"],
+                    "platforms": ["MS-DOS"]
+                }
+            ]
+        },
+        {
             "title": "BioShock",
             "cover_art_filepath": "/code/scripts_data/bioshock_cover.jpg",
             "genres": ["First-Person Shooter", "SystemShock-Like"],
@@ -213,6 +243,22 @@
                 }
             ],
             "collection_of": ["BioShock", "BioShock 2", "BioShock Infinite"]
+        },
+        {
+            "title": "Prey",
+            "cover_art_filepath": "/code/scripts_data/prey_cover.jpg",
+            "genres": ["First-Person Shooter", "SystemShock-Like"],
+            "franchises": ["Prey"],
+            "developers": ["Arkane Studios"],
+            "modes": ["Singleplayer"],
+            "releases": [
+                {
+                    "release_date": "2017-05-04",
+                    "region": "NA",
+                    "publishers": ["Bethesda Softworks"],
+                    "platforms": ["PS4", "Xbox One", "PC"]
+                }
+            ]
         }
     ]
 }

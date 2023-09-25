@@ -161,18 +161,21 @@ class GameList(generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = self.queryset
-        collections_only = self.request.query_params.get("collections_only")
-        if collections_only:
-            return queryset.exclude(collectees=None)
-        else:
-            return (
-                queryset.filter(game_dlc=None).filter(collectees=None).order_by("title")
-            )
+        return queryset.order_by("title")
+
+        # collections_only = self.request.query_params.get("collections_only")
+        # if collections_only:
+        #     return queryset.exclude(collectees=None)
+        # else:
+        #     return (
+        #         queryset.filter(game_dlc=None).filter(collectees=None).order_by("title")
+        #     )
 
 
 class GameDetailList(generics.RetrieveUpdateDestroyAPIView):
     queryset = Game.objects.all()
     serializer_class = GameDetailSerializer
+    lookup_field = "url_slug"
 
 
 class GameRelease(viewsets.ModelViewSet):
@@ -180,7 +183,7 @@ class GameRelease(viewsets.ModelViewSet):
     serializer_class = ReleaseSerializer
 
     def get_queryset(self):
-        pk = self.kwargs["pk"]
+        pk = Game.objects.get(url_slug=self.kwargs["url_slug"])
         queryset = self.queryset
         query_set = queryset.filter(game=pk)
         return query_set
@@ -191,7 +194,7 @@ class GamePurchase(viewsets.ModelViewSet):
     serializer_class = PurchaseSerializer
 
     def get_queryset(self):
-        pk = self.kwargs["pk"]
+        pk = Game.objects.get(url_slug=self.kwargs["url_slug"])
         queryset = self.queryset
         query_set = queryset.filter(release__game=pk)
         return query_set
