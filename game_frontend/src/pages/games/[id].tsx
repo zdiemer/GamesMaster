@@ -83,7 +83,7 @@ export default function Games() {
           return (
             <li key={index}>Released {release.release_date} in {convertRegionToEmoji(release.region)} for {
               release.platforms.map((rls, i, arr) => {
-                return (<span key={i}><Link href={`/platforms/${rls.id}`}>{rls.name}</Link>{i !== arr.length-1 && <>, </>}</span>)
+                return (<span key={i}><Link href={`/platforms/${rls.url_slug}`}>{rls.name}</Link>{i !== arr.length-1 && <>, </>}</span>)
               })}</li>
           );
         })}

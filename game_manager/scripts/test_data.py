@@ -20,6 +20,12 @@ from backend.models import (
 )
 
 
+def convert_to_url_slug(slug: str) -> str:
+    slug = slug.lower()
+    slug = slug.replace(" ", "-")
+    return re.sub(r'[^0-9a-zA-Z\-]+', '', slug)
+
+
 def run():
     # I must be made prior to use, because I have more than just a name field.
     Region.objects.create(
@@ -52,8 +58,6 @@ def run():
         if "cover_art_filepath" in g:
             minio_id = str(uuid.uuid4())
 
-            
-
             result = minio_client.fput_object(
                 bucket_name, minio_id, g["cover_art_filepath"],
             )
@@ -64,10 +68,7 @@ def run():
             )
             cover_art_uuid = minio_id
 
-        url_slug = g["title"]
-        url_slug = url_slug.lower()
-        url_slug = url_slug.replace(" ", "-")
-        url_slug = re.sub('[^0-9a-zA-Z\-]+', '', url_slug)
+        url_slug = convert_to_url_slug(g["title"])
 
         dbg = Game(title=g["title"], cover_art_uuid=cover_art_uuid, url_slug=url_slug)
         dbg.save()
@@ -110,7 +111,7 @@ def run():
                     pubDb, _ = Company.objects.get_or_create(name=pub)
                     rls.publishers.add(pubDb)
                 for plat in r["platforms"]:
-                    platDb, _ = Platform.objects.get_or_create(name=plat)
+                    platDb, _ = Platform.objects.get_or_create(name=plat, url_slug=convert_to_url_slug(plat))
                     rls.platforms.add(platDb)
                 
                 if "purchases" in r:

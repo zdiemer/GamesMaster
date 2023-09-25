@@ -9,6 +9,7 @@ from rest_framework import viewsets, permissions, status, generics
 from django.contrib.postgres.aggregates import ArrayAgg
 from minio import Minio
 from PIL import Image
+from django.db.models import Q
 
 from .serializers import (
     PurchaseSerializer,
@@ -158,6 +159,7 @@ class PlatformList(generics.ListCreateAPIView):
 class PlatformDetailList(generics.RetrieveUpdateDestroyAPIView):
     queryset = Platform.objects.all()
     serializer_class = PlatformSerializer
+    lookup_field = "url_slug"
 
 
 class GameList(generics.ListCreateAPIView):
@@ -166,15 +168,12 @@ class GameList(generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = self.queryset
-        return queryset.order_by("title")
 
-        # collections_only = self.request.query_params.get("collections_only")
-        # if collections_only:
-        #     return queryset.exclude(collectees=None)
-        # else:
-        #     return (
-        #         queryset.filter(game_dlc=None).filter(collectees=None).order_by("title")
-        #     )
+        platform_filter = self.request.query_params.get("platform")
+        if platform_filter:
+            queryset = queryset.filter(release__platforms__url_slug=platform_filter).distinct()
+
+        return queryset.order_by("title")
 
 
 class GameDetailList(generics.RetrieveUpdateDestroyAPIView):

@@ -14,7 +14,7 @@ urlpatterns = [
     path("api/companies", views.CompanyList.as_view()),
     path("api/genres", views.GenreList.as_view()),
     path("api/platforms", views.PlatformList.as_view()),
-    path("api/platforms/<int:pk>", views.PlatformDetailList.as_view()),
+    path("api/platforms/<str:url_slug>", views.PlatformDetailList.as_view()),
     path("api/modes", views.ModeList.as_view()),
     path("api/games", views.GameList.as_view()),
     path("api/games/", views.GameList.as_view()),

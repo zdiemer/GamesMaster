@@ -25,7 +25,7 @@ class ModeSerializer(serializers.ModelSerializer):
 class PlatformSerializer(serializers.ModelSerializer):
     class Meta:
         model = Platform
-        fields = ["id", "name"]
+        fields = ["url_slug", "name"]
 
 
 class ReleaseSerializer(serializers.ModelSerializer):
