@@ -6,7 +6,7 @@ export function Game({ game }: any) {
     return (
         <div className={styles.game}>
             <h3>
-                <Link href={`/games/${game.id}`}>{game.title}</Link>
+                <Link href={`/games/${game.url_slug}`}>{game.title}</Link>
             </h3>
             <p>{game.modes.join(", ")}</p>
             <p>{game.genres.join(", ")}</p>
