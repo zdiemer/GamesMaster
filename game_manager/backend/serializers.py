@@ -25,14 +25,12 @@ class ModeSerializer(serializers.ModelSerializer):
 class PlatformSerializer(serializers.ModelSerializer):
     class Meta:
         model = Platform
-        fields = ["name"]
+        fields = ["id", "name"]
 
 
 class ReleaseSerializer(serializers.ModelSerializer):
     region = serializers.SlugRelatedField(read_only=True, slug_field="display_name")
-    platforms = serializers.SlugRelatedField(
-        many=True, read_only=True, slug_field="name"
-    )
+    platforms = PlatformSerializer(many=True)
 
     class Meta:
         model = Release

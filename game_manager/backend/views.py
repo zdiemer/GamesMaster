@@ -155,6 +155,11 @@ class PlatformList(generics.ListCreateAPIView):
     serializer_class = PlatformSerializer
 
 
+class PlatformDetailList(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Platform.objects.all()
+    serializer_class = PlatformSerializer
+
+
 class GameList(generics.ListCreateAPIView):
     queryset = Game.objects.all()
     serializer_class = GameListSerializer

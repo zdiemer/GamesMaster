@@ -1,4 +1,3 @@
-import { Game } from '../components/game';
 import Page from '../components/page';
 import styles from '../styles/pages/home.module.scss';
 import Link from 'next/link'
