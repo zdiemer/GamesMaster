@@ -105,8 +105,8 @@ class NotableDeveloperSerializer(serializers.ModelSerializer):
 
 class GameListSerializer(serializers.ModelSerializer):
     genres = serializers.SlugRelatedField(many=True, read_only=True, slug_field="name")
-    developers = CompanySerializer(many=True)
-    franchises = FranchiseSerializer(many=True)
+    developers = CompanySerializer(many=True, read_only=True)
+    franchises = FranchiseSerializer(many=True, read_only=True)
 
     # releases = ReleaseSerializer(source='release_set', many=True, read_only=True)
     modes = serializers.SlugRelatedField(many=True, read_only=True, slug_field="mode")
@@ -121,6 +121,10 @@ class GameListSerializer(serializers.ModelSerializer):
             "modes",
             "franchises",
         ]
+
+    def create(self, validated_data):
+        g = Game.objects.create(**validated_data)
+        return g
 
 
 class NestedGameSerializer(serializers.ModelSerializer):
