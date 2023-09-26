@@ -220,7 +220,16 @@
                     "release_date": "2010-02-09",
                     "region": "NA",
                     "publishers": ["2K Games"],
-                    "platforms": ["Xbox 360", "PC", "PS3"]
+                    "platforms": ["Xbox 360", "PC", "PS3"],
+                    "purchases": [
+                        {
+                            "ownership_type": "CO",
+                            "purchase_format": "PL",
+                            "purchase_date": "2010-02-09",
+                            "purchase_price": 59.99,
+                            "platform": "Xbox 360"
+                        }
+                    ]
                 }
             ]
         },
@@ -284,7 +293,16 @@
                     "release_date": "2013-03-26",
                     "region": "NA",
                     "publishers": ["2K Games"],
-                    "platforms": ["Xbox 360", "PC", "PS3"]
+                    "platforms": ["Xbox 360", "PC", "PS3"],
+                    "purchases": [
+                        {
+                            "ownership_type": "CO",
+                            "purchase_format": "PL",
+                            "purchase_date": "2013-03-26",
+                            "purchase_price": 59.99,
+                            "platform": "Xbox 360"
+                        }
+                    ]
                 }
             ]
         },

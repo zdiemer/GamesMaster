@@ -74,6 +74,11 @@ export default function Games() {
     });
   }) || []);
 
+  const purchases = [];
+  purchases.push(...releaseData?.results.flatMap((rls) => {
+    return rls.purchases || [];
+  }) || []);
+
 
   return (
     <Page>
@@ -110,17 +115,24 @@ export default function Games() {
 
       {!!reviews.length && <span>Reviews:</span>}
       <ul>
-        {reviews.map((rev) => {
-          return (<li>{rev.rating} from {rev.reviewing_agency} on {rev.platforms.map((r, i, arr) => {
-            return (<span><Link href={`/platforms/${r.url_slug}`}>{r.name}</Link>{i !== arr.length - 1 && <>, </>}</span>)
-          })}{!!rev.notes && <><br/>"{rev.notes}"</>}</li>);
+        {reviews.map((rev, i) => {
+          return (<li key={i}>{rev.rating} from {rev.reviewing_agency} on {rev.platforms.map((r, i, arr) => {
+            return (<span key={i}><Link href={`/platforms/${r.url_slug}`}>{r.name}</Link>{i !== arr.length - 1 && <>, </>}</span>)
+          })}{!!rev.notes && <><br />"{rev.notes}"</>}</li>);
+        })}
+      </ul>
+
+      {!!purchases.length && <span>Purchase Records:</span>}
+      <ul>
+        {purchases.map((p, i) => {
+          return (<li key={i}><div >purchased on {p.purchase_date} for ${p.purchase_price} on <Link href={`/platforms/${p.platform.url_slug}`}>{p.platform.name}</Link></div></li>);
         })}
       </ul>
 
 
       {!!dlcStanza ? dlcStanza : ''}
       {!!collectionStanza ? collectionStanza : ''}
-{/* 
+      {/* 
       {purchaseData?.results.map((purchase: any, index) => {
         return (
           <div key={index}>purchased on {purchase.purchase_date} for ${purchase.purchase_price}</div>
