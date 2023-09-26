@@ -13,7 +13,7 @@ export default function Games() {
   console.log(`port: ${process.env.API_PORT}`);
   const { data: gameData, error, isLoading } = useSWR(!!id ? `/api/games/${id}` : null, fetcher);
   const { data: releaseData, error: error2, isLoading: isLoading2 } = useSWR(!!id ? `/api/games/${id}/releases` : null, fetcher);
-  const { data: purchaseData } = useSWR(!!id ? `/api/games/${id}/purchases` : null, fetcher);
+  // const { data: purchaseData } = useSWR(!!id ? `/api/games/${id}/purchases` : null, fetcher);
 
   if (error || error2) return <div>Failed to fetch users.</div>;
   if (isLoading || isLoading2) return <h2>Loading...</h2>;
@@ -62,6 +62,19 @@ export default function Games() {
     );
   }
 
+  const reviews = [];
+  reviews.push(...releaseData?.results.flatMap((rls) => {
+    let reviews = rls.reviews || [];
+    return reviews.map(rev => {
+      // If there's no platform, default to all from the parent.
+      if (rev.platforms.length === 0) {
+        rev.platforms = rls.platforms;
+      }
+      return rev;
+    });
+  }) || []);
+
+
   return (
     <Page>
       <h1>{gameData?.title}</h1>
@@ -95,14 +108,24 @@ export default function Games() {
         })}
       </ul>
 
+      {!!reviews.length && <span>Reviews:</span>}
+      <ul>
+        {reviews.map((rev) => {
+          return (<li>{rev.rating} from {rev.reviewing_agency} on {rev.platforms.map((r, i, arr) => {
+            return (<span><Link href={`/platforms/${r.url_slug}`}>{r.name}</Link>{i !== arr.length - 1 && <>, </>}</span>)
+          })}{!!rev.notes && <><br/>"{rev.notes}"</>}</li>);
+        })}
+      </ul>
+
+
       {!!dlcStanza ? dlcStanza : ''}
       {!!collectionStanza ? collectionStanza : ''}
-
+{/* 
       {purchaseData?.results.map((purchase: any, index) => {
         return (
           <div key={index}>purchased on {purchase.purchase_date} for ${purchase.purchase_price}</div>
         );
-      })}
+      })} */}
     </Page>)
 }
 

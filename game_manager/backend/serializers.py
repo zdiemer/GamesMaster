@@ -1,7 +1,18 @@
 from django.contrib.auth.models import User, Group
 from rest_framework import serializers
 
-from .models import Game, Genre, Release, Company, Mode, Platform, Purchase, NotableDeveloper, Franchise
+from .models import (
+    Game,
+    Genre,
+    Release,
+    Company,
+    Mode,
+    Platform,
+    Purchase,
+    NotableDeveloper,
+    Franchise,
+    Review,
+)
 
 
 class CompanySerializer(serializers.ModelSerializer):
@@ -14,6 +25,7 @@ class FranchiseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Company
         fields = ["name", "url_slug"]
+
 
 class GenreSerializer(serializers.ModelSerializer):
     class Meta:
@@ -33,14 +45,49 @@ class PlatformSerializer(serializers.ModelSerializer):
         fields = ["url_slug", "name"]
 
 
+class PurchaseSerializer(serializers.ModelSerializer):
+    platform = PlatformSerializer()
+
+    class Meta:
+        model = Purchase
+        fields = [
+            "purchase_format",
+            "purchase_date",
+            "purchase_price",
+            "platform",
+        ]
+
+
+class ReviewSerializer(serializers.ModelSerializer):
+    platforms = PlatformSerializer(many=True)
+
+    class Meta:
+        model = Review
+        fields = [
+            "reviewing_agency",
+            "notes",
+            "rating",
+            "platforms",
+        ]
+
+
 class ReleaseSerializer(serializers.ModelSerializer):
     region = serializers.SlugRelatedField(read_only=True, slug_field="display_name")
     platforms = PlatformSerializer(many=True)
     publishers = CompanySerializer(many=True)
+    reviews = ReviewSerializer(many=True, source="review_set")
+    purchases = PurchaseSerializer(many=True, source="purchase_set")
 
     class Meta:
         model = Release
-        fields = ["release_date", "platforms", "region", "publishers"]
+        fields = [
+            "release_date",
+            "platforms",
+            "region",
+            "publishers",
+            "reviews",
+            "purchases",
+        ]
 
 
 class NotableDeveloperSerializer(serializers.ModelSerializer):
@@ -54,6 +101,7 @@ class NotableDeveloperSerializer(serializers.ModelSerializer):
             "name",
             "role",
         ]
+
 
 class GameListSerializer(serializers.ModelSerializer):
     genres = serializers.SlugRelatedField(many=True, read_only=True, slug_field="name")
@@ -72,13 +120,13 @@ class GameListSerializer(serializers.ModelSerializer):
             "developers",
             "modes",
             "franchises",
-        ]    
+        ]
+
 
 class NestedGameSerializer(serializers.ModelSerializer):
     genres = serializers.SlugRelatedField(many=True, read_only=True, slug_field="name")
     developers = CompanySerializer(many=True)
     franchises = FranchiseSerializer(many=True)
-
 
     # releases = ReleaseSerializer(source='release_set', many=True, read_only=True)
     modes = serializers.SlugRelatedField(many=True, read_only=True, slug_field="mode")
@@ -93,6 +141,7 @@ class NestedGameSerializer(serializers.ModelSerializer):
             "modes",
             "franchises",
         ]
+
 
 class GameDetailSerializer(serializers.ModelSerializer):
     genres = serializers.SlugRelatedField(many=True, read_only=True, slug_field="name")
@@ -119,17 +168,7 @@ class GameDetailSerializer(serializers.ModelSerializer):
             "notable_developers",
             # "releases",
         ]
-    
+
     def get_notable_developers(self, instance):
         nds = NotableDeveloper.objects.filter(game=instance)
         return [NotableDeveloperSerializer(nd).data for nd in nds]
-
-class PurchaseSerializer(serializers.ModelSerializer):
-
-    class Meta:
-        model = Purchase
-        fields = [
-            "purchase_format",
-            "purchase_date",
-            "purchase_price",
-        ]

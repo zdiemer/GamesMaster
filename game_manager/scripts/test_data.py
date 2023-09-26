@@ -17,6 +17,7 @@ from backend.models import (
     NotableDeveloper,
     Mode,
     Purchase,
+    Review,
 )
 
 
@@ -116,9 +117,19 @@ def run():
                 
                 if "purchases" in r:
                     for pur in r["purchases"]:
+                        platDb, _ = Platform.objects.get_or_create(name=pur["platform"], url_slug=convert_to_url_slug(pur["platform"]))
                         pur["release"] = rls
+                        pur["platform"] = platDb
                         Purchase.objects.create(
                             **pur
+                        )
+                
+                if "reviews" in r:
+                    for rev in r["reviews"]:
+                        rev["release"] = rls
+                        # rev["platforms"] = 
+                        Review.objects.create(
+                            **rev
                         )
 
 

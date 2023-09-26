@@ -1,6 +1,7 @@
 from django.db import models
 import uuid
 
+
 class Genre(models.Model):
     name = models.CharField(max_length=200)
 
@@ -100,6 +101,16 @@ class Release(models.Model):
     publishers = models.ManyToManyField(Company)
 
 
+class Review(models.Model):
+    reviewing_agency = models.CharField(max_length=200)
+    notes = models.TextField(null=True)
+    rating = models.IntegerField()
+    release = models.ForeignKey(Release, on_delete=models.CASCADE)
+    # If there are multiple platforms in the release, then we may need to
+    # specify that the review was for a specific platform.
+    platforms = models.ManyToManyField(Platform)
+
+
 class Purchase(models.Model):
     SEALED = "SL"
     COMPLETE = "CO"
@@ -149,3 +160,4 @@ class Purchase(models.Model):
     )
 
     release = models.ForeignKey(Release, on_delete=models.CASCADE)
+    platform = models.ForeignKey(Platform, on_delete=models.CASCADE)

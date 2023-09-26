@@ -22,6 +22,7 @@ urlpatterns = [
     path("api/games/", views.GameList.as_view()),
     path("api/games/<str:url_slug>/", views.GameDetailList.as_view(), name='game-detail'),
     path("api/games/<str:url_slug>/releases", views.GameRelease.as_view({'get': 'list'})),
+    # path("api/games/<str:url_slug>/reviews", views.GameRelease.as_view({'get': 'list'})),
     path("api/games/<str:url_slug>/purchases", views.GamePurchase.as_view({'get': 'list'})),
     # path("api/releases", views.ReleaseList.as_view()),
     path("healthz", views.healthcheck, name="healthz")

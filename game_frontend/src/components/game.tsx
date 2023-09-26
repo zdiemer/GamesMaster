@@ -14,7 +14,7 @@ export function Game({ game }: any) {
             <p>
                 Developed by:
                 <br />
-                {game.developers.join(", ")}
+                {game.developers.map(company => company.name).join(", ")}
             </p>
         </div>
     );

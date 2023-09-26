@@ -21,6 +21,7 @@ from .serializers import (
     GameDetailSerializer,
     ReleaseSerializer,
     FranchiseSerializer,
+    ReviewSerializer,
 )
 from .models import (
     Game,
@@ -32,6 +33,7 @@ from .models import (
     Company,
     Mode,
     Franchise,
+    Review,
 )
 
 minioClient = Minio(
@@ -217,6 +219,16 @@ class GameRelease(viewsets.ModelViewSet):
         query_set = queryset.filter(game=pk)
         return query_set
 
+
+# class GameReviews(viewsets.ModelViewSet):
+#     queryset = Review.objects.all()
+#     serializer_class = ReviewSerializer
+
+#     def get_queryset(self):
+#         pk = Game.objects.get(url_slug=self.kwargs["url_slug"])
+#         queryset = self.queryset
+#         query_set = queryset.filter(release__game=pk)
+#         return query_set
 
 class GamePurchase(viewsets.ModelViewSet):
     queryset = Purchase.objects.all()
