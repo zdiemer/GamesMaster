@@ -9,6 +9,7 @@ from rest_framework import viewsets, permissions, status, generics
 from django.contrib.postgres.aggregates import ArrayAgg
 from minio import Minio
 from PIL import Image
+from django.db.models import Q
 
 from .serializers import (
     PurchaseSerializer,
@@ -19,6 +20,8 @@ from .serializers import (
     GameListSerializer,
     GameDetailSerializer,
     ReleaseSerializer,
+    FranchiseSerializer,
+    ReviewSerializer,
 )
 from .models import (
     Game,
@@ -29,6 +32,8 @@ from .models import (
     Purchase,
     Company,
     Mode,
+    Franchise,
+    Review,
 )
 
 minioClient = Minio(
@@ -130,6 +135,12 @@ def index(request):
     return HttpResponse(res)
 
 
+class FranchiseDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Franchise.objects.all()
+    serializer_class = FranchiseSerializer
+    lookup_field = "url_slug"
+
+
 class ReleaseList(generics.ListCreateAPIView):
     queryset = Release.objects.all()
     serializer_class = ReleaseSerializer
@@ -139,6 +150,10 @@ class CompanyList(generics.ListCreateAPIView):
     queryset = Company.objects.all()
     serializer_class = CompanySerializer
 
+class CompanyDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Company.objects.all()
+    serializer_class = CompanySerializer
+    lookup_field = "url_slug"
 
 class GenreList(generics.ListCreateAPIView):
     queryset = Genre.objects.all()
@@ -155,24 +170,43 @@ class PlatformList(generics.ListCreateAPIView):
     serializer_class = PlatformSerializer
 
 
+class PlatformDetailList(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Platform.objects.all()
+    serializer_class = PlatformSerializer
+    lookup_field = "url_slug"
+
+
 class GameList(generics.ListCreateAPIView):
     queryset = Game.objects.all()
     serializer_class = GameListSerializer
 
     def get_queryset(self):
         queryset = self.queryset
-        collections_only = self.request.query_params.get("collections_only")
-        if collections_only:
-            return queryset.exclude(collectees=None)
-        else:
-            return (
-                queryset.filter(game_dlc=None).filter(collectees=None).order_by("title")
-            )
+
+        platform_filter = self.request.query_params.get("platform")
+        if platform_filter:
+            queryset = queryset.filter(release__platforms__url_slug=platform_filter).distinct()
+
+        franchise_filter = self.request.query_params.get("franchise")
+        if franchise_filter:
+            queryset = queryset.filter(franchises__url_slug=franchise_filter).distinct()
+
+        developer_filter = self.request.query_params.get("developer")
+        if developer_filter:
+            queryset = queryset.filter(developers__url_slug=developer_filter).distinct()
+
+        publisher_filter = self.request.query_params.get("publisher")
+        if publisher_filter:
+            queryset = queryset.filter(release__publishers__url_slug=publisher_filter).distinct()
+
+
+        return queryset.order_by("title")
 
 
 class GameDetailList(generics.RetrieveUpdateDestroyAPIView):
     queryset = Game.objects.all()
     serializer_class = GameDetailSerializer
+    lookup_field = "url_slug"
 
 
 class GameRelease(viewsets.ModelViewSet):
@@ -180,18 +214,28 @@ class GameRelease(viewsets.ModelViewSet):
     serializer_class = ReleaseSerializer
 
     def get_queryset(self):
-        pk = self.kwargs["pk"]
+        pk = Game.objects.get(url_slug=self.kwargs["url_slug"])
         queryset = self.queryset
         query_set = queryset.filter(game=pk)
         return query_set
 
+
+# class GameReviews(viewsets.ModelViewSet):
+#     queryset = Review.objects.all()
+#     serializer_class = ReviewSerializer
+
+#     def get_queryset(self):
+#         pk = Game.objects.get(url_slug=self.kwargs["url_slug"])
+#         queryset = self.queryset
+#         query_set = queryset.filter(release__game=pk)
+#         return query_set
 
 class GamePurchase(viewsets.ModelViewSet):
     queryset = Purchase.objects.all()
     serializer_class = PurchaseSerializer
 
     def get_queryset(self):
-        pk = self.kwargs["pk"]
+        pk = Game.objects.get(url_slug=self.kwargs["url_slug"])
         queryset = self.queryset
         query_set = queryset.filter(release__game=pk)
         return query_set
