@@ -7,12 +7,12 @@ import { GamesListWithPaging } from '../../components/game';
 export default function Games() {
   const router = useRouter()
   const { id } = router.query;
-  const { data } = useSWR(`/api/platforms/${id}`);
+  const { data } = useSWR(`/api/franchises/${id}`);
 
     return (
       <Page>
-      <h1>{data?.name}</h1>
-      <h2>Games on this platform</h2>
-      <GamesListWithPaging platform={id}></GamesListWithPaging>
+      <h1>The {data?.name} Franchise</h1>
+      <h2>Games in this franchise</h2>
+      <GamesListWithPaging franchise={id}></GamesListWithPaging>
     </Page>);
 };

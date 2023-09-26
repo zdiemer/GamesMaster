@@ -40,6 +40,7 @@ class Person(models.Model):
 
 class Company(models.Model):
     name = models.CharField(max_length=200)
+    url_slug = models.CharField(max_length=200, unique=True)
 
     def __str__(self):
         return f"{self.name}"
@@ -47,6 +48,7 @@ class Company(models.Model):
 
 class Franchise(models.Model):
     name = models.CharField(max_length=200)
+    url_slug = models.CharField(max_length=200, unique=True)
 
     def __str__(self):
         return f"{self.name}"

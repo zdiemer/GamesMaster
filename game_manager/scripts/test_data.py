@@ -80,12 +80,12 @@ def run():
 
         if "franchises" in g:
             for franchise in g["franchises"]:
-                fdb, _ = Franchise.objects.get_or_create(name=franchise)
+                fdb, _ = Franchise.objects.get_or_create(name=franchise, url_slug=convert_to_url_slug(franchise))
                 dbg.franchises.add(fdb)
 
         if "developers" in g:
             for developers in g["developers"]:
-                dbDev, _ = Company.objects.get_or_create(name=developers)
+                dbDev, _ = Company.objects.get_or_create(name=developers, url_slug=convert_to_url_slug(developers))
                 dbg.developers.add(dbDev)
 
         if "notableDevelopers" in g:
@@ -108,7 +108,7 @@ def run():
                     game=dbg,
                 )
                 for pub in r["publishers"]:
-                    pubDb, _ = Company.objects.get_or_create(name=pub)
+                    pubDb, _ = Company.objects.get_or_create(name=pub, url_slug=convert_to_url_slug(pub))
                     rls.publishers.add(pubDb)
                 for plat in r["platforms"]:
                     platDb, _ = Platform.objects.get_or_create(name=plat, url_slug=convert_to_url_slug(plat))

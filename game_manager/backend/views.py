@@ -20,6 +20,7 @@ from .serializers import (
     GameListSerializer,
     GameDetailSerializer,
     ReleaseSerializer,
+    FranchiseSerializer,
 )
 from .models import (
     Game,
@@ -30,6 +31,7 @@ from .models import (
     Purchase,
     Company,
     Mode,
+    Franchise,
 )
 
 minioClient = Minio(
@@ -131,6 +133,12 @@ def index(request):
     return HttpResponse(res)
 
 
+class FranchiseDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Franchise.objects.all()
+    serializer_class = FranchiseSerializer
+    lookup_field = "url_slug"
+
+
 class ReleaseList(generics.ListCreateAPIView):
     queryset = Release.objects.all()
     serializer_class = ReleaseSerializer
@@ -140,6 +148,10 @@ class CompanyList(generics.ListCreateAPIView):
     queryset = Company.objects.all()
     serializer_class = CompanySerializer
 
+class CompanyDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Company.objects.all()
+    serializer_class = CompanySerializer
+    lookup_field = "url_slug"
 
 class GenreList(generics.ListCreateAPIView):
     queryset = Genre.objects.all()
@@ -172,6 +184,19 @@ class GameList(generics.ListCreateAPIView):
         platform_filter = self.request.query_params.get("platform")
         if platform_filter:
             queryset = queryset.filter(release__platforms__url_slug=platform_filter).distinct()
+
+        franchise_filter = self.request.query_params.get("franchise")
+        if franchise_filter:
+            queryset = queryset.filter(franchises__url_slug=franchise_filter).distinct()
+
+        developer_filter = self.request.query_params.get("developer")
+        if developer_filter:
+            queryset = queryset.filter(developers__url_slug=developer_filter).distinct()
+
+        publisher_filter = self.request.query_params.get("publisher")
+        if publisher_filter:
+            queryset = queryset.filter(release__publishers__url_slug=publisher_filter).distinct()
+
 
         return queryset.order_by("title")
 

@@ -69,11 +69,15 @@ export default function Games() {
       <img src={`/images/${gameData?.cover_art_uuid}`} height={200}></img>
       <div>
         <p>
-          Franchise: <span>{gameData?.franchises.join(", ")}</span>
+          Franchise: <span>{gameData?.franchises.map((f, i) => {
+            return (<Link key={i} href={`/franchises/${f.url_slug}`}>{f.name}</Link>);
+          })}</span>
           <br />
           Genre(s): <span>{gameData?.genres.join(", ")}</span>
           <br />
-          Developed by: <span>{gameData?.developers.join(", ")}</span>
+          Developed by: <span>{gameData?.developers.map((d, i, arr) => {
+            return (<span key={i}><Link href={`/companies/${d.url_slug}`}>{d.name}</Link>{i !== arr.length - 1 && <>, </>}</span>)
+          })}</span>
         </p>
         {!!developersStanza ? developersStanza : ''}
       </div>
@@ -83,7 +87,9 @@ export default function Games() {
           return (
             <li key={index}>Released {release.release_date} in {convertRegionToEmoji(release.region)} for {
               release.platforms.map((rls, i, arr) => {
-                return (<span key={i}><Link href={`/platforms/${rls.url_slug}`}>{rls.name}</Link>{i !== arr.length-1 && <>, </>}</span>)
+                return (<span key={i}><Link href={`/platforms/${rls.url_slug}`}>{rls.name}</Link>{i !== arr.length - 1 && <>, </>}</span>)
+              })} by {release.publishers.map((plat, i, arr) => {
+                return (<span key={i}><Link href={`/companies/${plat.url_slug}`}>{plat.name}</Link></span>)
               })}</li>
           );
         })}

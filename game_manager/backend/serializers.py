@@ -1,14 +1,19 @@
 from django.contrib.auth.models import User, Group
 from rest_framework import serializers
 
-from .models import Game, Genre, Release, Company, Mode, Platform, Purchase, NotableDeveloper
+from .models import Game, Genre, Release, Company, Mode, Platform, Purchase, NotableDeveloper, Franchise
 
 
 class CompanySerializer(serializers.ModelSerializer):
     class Meta:
         model = Company
-        fields = ["name"]
+        fields = ["name", "url_slug"]
 
+
+class FranchiseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Company
+        fields = ["name", "url_slug"]
 
 class GenreSerializer(serializers.ModelSerializer):
     class Meta:
@@ -31,10 +36,11 @@ class PlatformSerializer(serializers.ModelSerializer):
 class ReleaseSerializer(serializers.ModelSerializer):
     region = serializers.SlugRelatedField(read_only=True, slug_field="display_name")
     platforms = PlatformSerializer(many=True)
+    publishers = CompanySerializer(many=True)
 
     class Meta:
         model = Release
-        fields = ["release_date", "platforms", "region"]
+        fields = ["release_date", "platforms", "region", "publishers"]
 
 
 class NotableDeveloperSerializer(serializers.ModelSerializer):
@@ -51,12 +57,8 @@ class NotableDeveloperSerializer(serializers.ModelSerializer):
 
 class GameListSerializer(serializers.ModelSerializer):
     genres = serializers.SlugRelatedField(many=True, read_only=True, slug_field="name")
-    developers = serializers.SlugRelatedField(
-        many=True, read_only=True, slug_field="name"
-    )
-    franchises = serializers.SlugRelatedField(
-        many=True, read_only=True, slug_field="name"
-    )
+    developers = CompanySerializer(many=True)
+    franchises = FranchiseSerializer(many=True)
 
     # releases = ReleaseSerializer(source='release_set', many=True, read_only=True)
     modes = serializers.SlugRelatedField(many=True, read_only=True, slug_field="mode")
@@ -74,12 +76,9 @@ class GameListSerializer(serializers.ModelSerializer):
 
 class NestedGameSerializer(serializers.ModelSerializer):
     genres = serializers.SlugRelatedField(many=True, read_only=True, slug_field="name")
-    developers = serializers.SlugRelatedField(
-        many=True, read_only=True, slug_field="name"
-    )
-    franchises = serializers.SlugRelatedField(
-        many=True, read_only=True, slug_field="name"
-    )
+    developers = CompanySerializer(many=True)
+    franchises = FranchiseSerializer(many=True)
+
 
     # releases = ReleaseSerializer(source='release_set', many=True, read_only=True)
     modes = serializers.SlugRelatedField(many=True, read_only=True, slug_field="mode")
@@ -97,14 +96,8 @@ class NestedGameSerializer(serializers.ModelSerializer):
 
 class GameDetailSerializer(serializers.ModelSerializer):
     genres = serializers.SlugRelatedField(many=True, read_only=True, slug_field="name")
-    developers = serializers.SlugRelatedField(
-        many=True, read_only=True, slug_field="name"
-    )
-    franchises = serializers.SlugRelatedField(
-        many=True, read_only=True, slug_field="name"
-    )
-
-    # releases = ReleaseSerializer(source='release_set', many=True, read_only=True)
+    developers = CompanySerializer(many=True)
+    franchises = FranchiseSerializer(many=True)
     modes = serializers.SlugRelatedField(many=True, read_only=True, slug_field="mode")
     dlc = NestedGameSerializer(many=True)
     collectees = NestedGameSerializer(many=True)

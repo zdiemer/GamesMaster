@@ -20,10 +20,13 @@ export function Game({ game }: any) {
     );
 }
 
-export function GamesListWithPaging({ platform }: { platform: string }) {
+export function GamesListWithPaging({ platform, franchise, developer, publisher }: { platform?: string, franchise?: string, developer?: string, publisher?: string}) {
     const [pageIndex, setPageIndex] = useState(1);
     const query_param_platforms = !!platform ? `&platform=${platform}` : "";
-    const { data } = useSWR(`/api/games?page=${pageIndex}${query_param_platforms}`);
+    const query_param_franchise = !!franchise ? `&franchise=${franchise}` : "";
+    const query_param_developer = !!developer ? `&developer=${developer}` : "";
+    const query_param_publisher = !!publisher ? `&publisher=${publisher}` : "";
+    const { data } = useSWR(`/api/games?page=${pageIndex}${query_param_platforms}${query_param_franchise}${query_param_developer}${query_param_publisher}`);
 
     return (<>
         <div>
