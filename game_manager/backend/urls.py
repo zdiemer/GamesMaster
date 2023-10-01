@@ -12,7 +12,7 @@ urlpatterns = [
     path("", views.index, name="index"),
     path("images/<str:image_id>", views.serveImage, name="images"),
     # path("api/companies", views.CompanyList.as_view()),
-    path("api/companies/<str:url_slug>", views.CompanyDetail.as_view()),
+    path("api/companies/<str:uuid>", views.CompanyDetail.as_view()),
     # path("api/genres", views.GenreList.as_view()),
     # path("api/platforms", views.PlatformList.as_view()),
     path("api/platforms/<str:url_slug>", views.PlatformDetailList.as_view()),

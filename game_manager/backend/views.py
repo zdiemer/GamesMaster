@@ -153,7 +153,6 @@ class CompanyList(generics.ListCreateAPIView):
 class CompanyDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = Company.objects.all()
     serializer_class = CompanySerializer
-    lookup_field = "url_slug"
 
 class GenreList(generics.ListCreateAPIView):
     queryset = Genre.objects.all()
@@ -198,7 +197,6 @@ class GameList(generics.ListCreateAPIView):
         publisher_filter = self.request.query_params.get("publisher")
         if publisher_filter:
             queryset = queryset.filter(release__publishers__url_slug=publisher_filter).distinct()
-
 
         return queryset.order_by("title")
 

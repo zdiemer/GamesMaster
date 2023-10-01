@@ -1,3 +1,5 @@
+#!/bin/bash
+
 echo "Destroying stack."
 docker compose down -v
 
