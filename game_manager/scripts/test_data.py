@@ -3,6 +3,7 @@ import uuid
 from minio import Minio
 import os
 import json
+import re
 
 from backend.models import (
     Game,
@@ -16,7 +17,14 @@ from backend.models import (
     NotableDeveloper,
     Mode,
     Purchase,
+    Review,
 )
+
+
+def convert_to_url_slug(slug: str) -> str:
+    slug = slug.lower()
+    slug = slug.replace(" ", "-")
+    return re.sub(r'[^0-9a-zA-Z\-]+', '', slug)
 
 
 def run():
@@ -51,8 +59,6 @@ def run():
         if "cover_art_filepath" in g:
             minio_id = str(uuid.uuid4())
 
-            
-
             result = minio_client.fput_object(
                 bucket_name, minio_id, g["cover_art_filepath"],
             )
@@ -63,50 +69,68 @@ def run():
             )
             cover_art_uuid = minio_id
 
-        dbg = Game(title=g["title"], cover_art_uuid=cover_art_uuid)
+        url_slug = convert_to_url_slug(g["title"])
+
+        dbg = Game(title=g["title"], cover_art_uuid=cover_art_uuid, url_slug=url_slug)
         dbg.save()
 
-        for genre in g["genres"]:
-            dbGenre, _ = Genre.objects.get_or_create(name=genre)
-            dbg.genres.add(dbGenre)
+        if "genres" in g:
+            for genre in g["genres"]:
+                dbGenre, _ = Genre.objects.get_or_create(name=genre)
+                dbg.genres.add(dbGenre)
 
-        for franchise in g["franchises"]:
-            fdb, _ = Franchise.objects.get_or_create(name=franchise)
-            dbg.franchises.add(fdb)
+        if "franchises" in g:
+            for franchise in g["franchises"]:
+                fdb, _ = Franchise.objects.get_or_create(name=franchise, url_slug=convert_to_url_slug(franchise))
+                dbg.franchises.add(fdb)
 
-        for developers in g["developers"]:
-            dbDev, _ = Company.objects.get_or_create(name=developers)
-            dbg.developers.add(dbDev)
+        if "developers" in g:
+            for developers in g["developers"]:
+                dbDev, _ = Company.objects.get_or_create(name=developers, url_slug=convert_to_url_slug(developers))
+                dbg.developers.add(dbDev)
 
-        for nd in g["notableDevelopers"]:
-            personDb, _ = Person.objects.get_or_create(name=nd["name"])
-            NotableDeveloper.objects.create(
-                developer=personDb, game=dbg, role=nd["role"]
-            )
+        if "notableDevelopers" in g:
+            for nd in g["notableDevelopers"]:
+                personDb, _ = Person.objects.get_or_create(name=nd["name"])
+                NotableDeveloper.objects.create(
+                    developer=personDb, game=dbg, role=nd["role"]
+                )
 
-        for m in g["modes"]:
-            mDb, _ = Mode.objects.get_or_create(mode=m)
-            dbg.modes.add(mDb)
+        if "modes" in g:
+            for m in g["modes"]:
+                mDb, _ = Mode.objects.get_or_create(mode=m)
+                dbg.modes.add(mDb)
 
-        for r in g["releases"]:
-            rls, _ = Release.objects.get_or_create(
-                release_date=r["release_date"],
-                region=Region.objects.get(short_code=r["region"]),
-                game=dbg,
-            )
-            for pub in r["publishers"]:
-                pubDb, _ = Company.objects.get_or_create(name=pub)
-                rls.publishers.add(pubDb)
-            for plat in r["platforms"]:
-                platDb, _ = Platform.objects.get_or_create(name=plat)
-                rls.platforms.add(platDb)
-            
-            if "purchases" in r:
-                for pur in r["purchases"]:
-                    pur["release"] = rls
-                    Purchase.objects.create(
-                        **pur
-                    )
+        if "releases" in g:
+            for r in g["releases"]:
+                rls, _ = Release.objects.get_or_create(
+                    release_date=r["release_date"],
+                    region=Region.objects.get(short_code=r["region"]),
+                    game=dbg,
+                )
+                for pub in r["publishers"]:
+                    pubDb, _ = Company.objects.get_or_create(name=pub, url_slug=convert_to_url_slug(pub))
+                    rls.publishers.add(pubDb)
+                for plat in r["platforms"]:
+                    platDb, _ = Platform.objects.get_or_create(name=plat, url_slug=convert_to_url_slug(plat))
+                    rls.platforms.add(platDb)
+                
+                if "purchases" in r:
+                    for pur in r["purchases"]:
+                        platDb, _ = Platform.objects.get_or_create(name=pur["platform"], url_slug=convert_to_url_slug(pur["platform"]))
+                        pur["release"] = rls
+                        pur["platform"] = platDb
+                        Purchase.objects.create(
+                            **pur
+                        )
+                
+                if "reviews" in r:
+                    for rev in r["reviews"]:
+                        rev["release"] = rls
+                        # rev["platforms"] = 
+                        Review.objects.create(
+                            **rev
+                        )
 
 
         if "dlc_of" in g:

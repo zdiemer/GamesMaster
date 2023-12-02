@@ -1,4 +1,5 @@
 from django.db import models
+import uuid
 
 
 class Genre(models.Model):
@@ -17,6 +18,7 @@ class Mode(models.Model):
 
 class Platform(models.Model):
     name = models.CharField(max_length=200)
+    url_slug = models.CharField(max_length=200, unique=True)
 
     def __str__(self):
         return f"{self.name}"
@@ -39,6 +41,7 @@ class Person(models.Model):
 
 class Company(models.Model):
     name = models.CharField(max_length=200)
+    url_slug = models.CharField(max_length=200, unique=True)
 
     def __str__(self):
         return f"{self.name}"
@@ -46,6 +49,7 @@ class Company(models.Model):
 
 class Franchise(models.Model):
     name = models.CharField(max_length=200)
+    url_slug = models.CharField(max_length=200, unique=True)
 
     def __str__(self):
         return f"{self.name}"
@@ -53,6 +57,7 @@ class Franchise(models.Model):
 
 class Game(models.Model):
     title = models.CharField(max_length=200)
+    url_slug = models.CharField(max_length=200, unique=True)
     # UUIDv4 to a minio image.
     cover_art_uuid = models.CharField(max_length=36)
     # If a game has been ported to a new engine, a new game entry should be created.
@@ -94,6 +99,16 @@ class Release(models.Model):
     region = models.ForeignKey(Region, on_delete=models.PROTECT)
     game = models.ForeignKey(Game, on_delete=models.PROTECT)
     publishers = models.ManyToManyField(Company)
+
+
+class Review(models.Model):
+    reviewing_agency = models.CharField(max_length=200)
+    notes = models.TextField(null=True)
+    rating = models.IntegerField()
+    release = models.ForeignKey(Release, on_delete=models.CASCADE)
+    # If there are multiple platforms in the release, then we may need to
+    # specify that the review was for a specific platform.
+    platforms = models.ManyToManyField(Platform)
 
 
 class Purchase(models.Model):
@@ -145,3 +160,4 @@ class Purchase(models.Model):
     )
 
     release = models.ForeignKey(Release, on_delete=models.CASCADE)
+    platform = models.ForeignKey(Platform, on_delete=models.CASCADE)

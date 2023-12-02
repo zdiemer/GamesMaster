@@ -55,6 +55,36 @@
             ]
         },
         {
+            "title": "System Shock: Enhanced Edition",
+            "genres": ["First-Person Shooter", "Action", "Adventure"],
+            "franchises": ["System Shock"],
+            "developers": ["LookingGlass Technologies, Inc.", "Nightdive Studios"],
+            "modes": ["Singleplayer"],
+            "releases": [
+                {
+                    "release_date": "2015-09-22",
+                    "region": "NA",
+                    "publishers": ["Nightdive Studios"],
+                    "platforms": ["PC"]
+                }
+            ]
+        },
+        {
+            "title": "System Shock (Remake)",
+            "genres": ["First-Person Shooter", "Action", "Adventure"],
+            "franchises": ["System Shock"],
+            "developers": ["Nightdive Studios"],
+            "modes": ["Singleplayer"],
+            "releases": [
+                {
+                    "release_date": "2023-05-30",
+                    "region": "NA",
+                    "publishers": ["Prime Matter"],
+                    "platforms": ["PC"]
+                }
+            ]
+        },
+        {
             "title": "BioShock",
             "cover_art_filepath": "/code/scripts_data/bioshock_cover.jpg",
             "genres": ["First-Person Shooter", "SystemShock-Like"],
@@ -86,7 +116,20 @@
                             "ownership_type": "CO",
                             "purchase_format": "PL",
                             "purchase_date": "2007-08-21",
-                            "purchase_price": 59.99
+                            "purchase_price": 59.99,
+                            "platform": "Xbox 360"
+                        }
+                    ],
+                    "reviews": [
+                        {
+                            "reviewing_agency": "Metacritic",
+                            "rating": 96
+
+                        },
+                        {
+                            "reviewing_agency": "Game Informer",
+                            "rating": 100,
+                            "notes": "It's ingenious, enthralling, and a masterpiece of the most epic proportions. So without further delay, would you kindly enter Rapture so that you too can experience the best that video games have to offer?"
                         }
                     ]
                 },
@@ -100,15 +143,64 @@
                     "release_date": "2008-10-21",
                     "region": "NA",
                     "publishers": ["2K Games"],
-                    "platforms": ["PS3"]
+                    "platforms": ["PS3"],
+                    "reviews": [
+                        {
+                            "reviewing_agency": "Metacritic",
+                            "rating": 94
+
+                        }
+                    ]
                 },
                 {
                     "release_date": "2009-10-01",
                     "region": "NA",
                     "publishers": ["Feral Interactive"],
-                    "platforms": ["MacOS"]
+                    "platforms": ["MacOS"],
+                    "reviews": [
+                        {
+                            "reviewing_agency": "Metacritic",
+                            "rating": 68
+
+                        }
+                    ]
                 }
             ]
+        },
+        {
+            "title": "BioShock Challenge Rooms",
+            "genres": ["First-Person Shooter", "SystemShock-Like"],
+            "franchises": ["BioShock"],
+            "developers": ["2K Boston", "Irrational Games"],
+            "notableDevelopers": [],
+            "modes": ["Singleplayer"],
+            "releases": [
+                {
+                    "release_date": "2008-11-20",
+                    "region": "NA",
+                    "publishers": ["2K Games"],
+                    "platforms": ["PS3"]
+                },
+                {
+                    "release_date": "2013-01-22",
+                    "region": "NA",
+                    "publishers": ["2K Games"],
+                    "platforms": ["Xbox 360"]
+                },
+                {
+                    "release_date": "2016-09-16",
+                    "region": "NA",
+                    "publishers": ["2K Games"],
+                    "platforms": ["PS4", "PC"]
+                },
+                {
+                    "release_date": "2020-05-29",
+                    "region": "NA",
+                    "publishers": ["2K Games"],
+                    "platforms": ["Nintendo Switch"]
+                }
+            ],
+            "dlc_of": "BioShock"
         },
         {
             "title": "BioShock 2",
@@ -128,7 +220,16 @@
                     "release_date": "2010-02-09",
                     "region": "NA",
                     "publishers": ["2K Games"],
-                    "platforms": ["Xbox 360", "PC", "PS3"]
+                    "platforms": ["Xbox 360", "PC", "PS3"],
+                    "purchases": [
+                        {
+                            "ownership_type": "CO",
+                            "purchase_format": "PL",
+                            "purchase_date": "2010-02-09",
+                            "purchase_price": 59.99,
+                            "platform": "Xbox 360"
+                        }
+                    ]
                 }
             ]
         },
@@ -192,7 +293,16 @@
                     "release_date": "2013-03-26",
                     "region": "NA",
                     "publishers": ["2K Games"],
-                    "platforms": ["Xbox 360", "PC", "PS3"]
+                    "platforms": ["Xbox 360", "PC", "PS3"],
+                    "purchases": [
+                        {
+                            "ownership_type": "CO",
+                            "purchase_format": "PL",
+                            "purchase_date": "2013-03-26",
+                            "purchase_price": 59.99,
+                            "platform": "Xbox 360"
+                        }
+                    ]
                 }
             ]
         },
@@ -213,6 +323,22 @@
                 }
             ],
             "collection_of": ["BioShock", "BioShock 2", "BioShock Infinite"]
+        },
+        {
+            "title": "Prey",
+            "cover_art_filepath": "/code/scripts_data/prey_cover.jpg",
+            "genres": ["First-Person Shooter", "SystemShock-Like"],
+            "franchises": ["Prey"],
+            "developers": ["Arkane Studios"],
+            "modes": ["Singleplayer"],
+            "releases": [
+                {
+                    "release_date": "2017-05-04",
+                    "region": "NA",
+                    "publishers": ["Bethesda Softworks"],
+                    "platforms": ["PS4", "Xbox One", "PC"]
+                }
+            ]
         }
     ]
 }
