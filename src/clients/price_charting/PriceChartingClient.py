@@ -59,6 +59,13 @@ class PriceChartingClient(ClientBase):
             ),
         )
 
+    def __sluggify(self, s: str) -> str:
+        disallowed = r"[^A-Za-z0-9\-\+; ]"
+        return re.sub(disallowed, "", s).lower().replace(" ", "-")
+
+    def __create_url(self, platform: str, title: str) -> str:
+        return f"https://www.pricecharting.com/game/{self.__sluggify(platform)}/{self.__sluggify(title)}"
+
     def should_skip(self, game: ExcelGame) -> bool:
         return game.owned_format not in ("Both", "Physical")
 
@@ -136,7 +143,8 @@ class PriceChartingClient(ClientBase):
                 matches.append(
                     GameMatch(
                         res["product-name"],
-                        id=res["id"],
+                        self.__create_url(res["console-name"], res["product-name"]),
+                        res["id"],
                         match_info=res,
                         validation_info=match,
                     )
@@ -159,9 +167,13 @@ class PriceChartingClient(ClientBase):
                 matches.append(
                     GameMatch(
                         default_match["product-name"],
-                        id=default_match["id"],
+                        self.__create_url(
+                            default_match["console-name"], default_match["product-name"]
+                        ),
+                        default_match["id"],
                         match_info=default_match,
                         validation_info=match,
                     )
                 )
+
         return matches

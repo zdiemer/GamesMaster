@@ -1,7 +1,7 @@
 """Classes for holding match info about game rows to external sources."""
 
 from enum import Enum
-from typing import Any, List, NamedTuple, Optional
+from typing import Any, List, Optional
 
 from excel_game import ExcelGame
 from match_validator import ValidationInfo
@@ -19,6 +19,8 @@ class DataSource(Enum):
     STEAM = 7
     HLTB = 8
     PRICE_CHARTING = 9
+    VG_CHARTZ = 10
+    GAMEYE = 11
 
     def __str__(self) -> str:
         return self.name
@@ -97,11 +99,15 @@ class GameMatchResultSet:
     successes: List[GameMatchResult]
     errors: List[GameMatchResult]
     skipped: List[GameMatchResult]
+    offset: int
+    batch_size: int
 
-    def __init__(self):
+    def __init__(self, offset: int, batch_size: int):
         self.successes = []
         self.errors = []
         self.skipped = []
+        self.offset = offset
+        self.batch_size = batch_size
 
     def __str__(self) -> str:
         return str(self.__dict__)

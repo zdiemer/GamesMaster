@@ -77,12 +77,21 @@ class IgdbClient(ClientBase):
     async def release_dates(self, data: str):
         return await self._make_request("release_dates/", data)
 
+    async def involved_companies(self, data: str):
+        return await self._make_request("involved_companies/", data)
+
+    async def companies(self, data: str):
+        return await self._make_request("companies/", data)
+
+    async def franchises(self, data: str):
+        return await self._make_request("franchises/", data)
+
     async def match_game(self, game: ExcelGame) -> List[GameMatch]:
         if not any(self.__platforms):
             await self._init_platforms()
 
         processed_title = unicodedata.normalize("NFKD", game.title).replace('"', '\\"')
-        search_data = f'search "{processed_title}"; fields alternative_names,id,name,platforms,genres,parent_game,url,release_dates;'.encode(
+        search_data = f'search "{processed_title}"; fields alternative_names,id,name,platforms,genres,parent_game,url,release_dates,involved_companies,franchises;'.encode(
             "utf-8"
         )
 
@@ -111,11 +120,62 @@ class IgdbClient(ClientBase):
                     datetime.fromtimestamp(date_response[0]["date"]).year
                 )
 
-            if not any(release_years):
+            if game.release_date is not None and not any(release_years):
                 continue
 
+            ic_responses = []
+
+            for cid in res.get("involved_companies") or []:
+                ic_responses.extend(
+                    await self.involved_companies(
+                        f"fields company,developer,publisher; where id = {cid};"
+                    )
+                    or []
+                )
+
+            developers = []
+            publishers = []
+
+            for ic in ic_responses:
+                if ic.get("developer"):
+                    devs = await self.companies(
+                        f"fields name; where id = {ic['company']};"
+                    )
+
+                    for dev in devs:
+                        if dev.get("name"):
+                            developers.append(dev["name"])
+
+                if ic.get("publisher"):
+                    pubs = await self.companies(
+                        f"fields name; where id = {ic['company']};"
+                    )
+
+                    for pub in pubs:
+                        if pub.get("name"):
+                            publishers.append(pub["name"])
+
+            fran_responses = []
+
+            for fid in res.get("franchises") or []:
+                fran_responses.extend(
+                    await self.franchises(f"fields name; where id = {fid};") or []
+                )
+
+            franchises = []
+
+            for fran in fran_responses:
+                if fran.get("name"):
+                    franchises.append(fran["name"])
+
             match = self.validator.validate(
-                game, res.get("name"), platforms_processed, release_years
+                game,
+                res.get("name"),
+                platforms_processed,
+                release_years,
+                publishers,
+                developers,
+                franchises,
             )
 
             if match.likely_match or (match.matched and not any(platforms_processed)):

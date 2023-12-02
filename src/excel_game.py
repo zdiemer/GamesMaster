@@ -52,7 +52,7 @@ class ExcelGame:
     id: int
     title: str
     platform: str
-    release_date: pd.DatetimeIndex
+    release_date: Optional[pd.DatetimeIndex]
     release_region: ExcelRegion
     publisher: str
     developer: str
@@ -76,7 +76,7 @@ class ExcelGame:
         owned_format: str,
     ):
         self.id = id
-        self.title = title
+        self.title = str(title)
         self.platform = platform
         self.release_date = release_date
         self.release_region = release_region

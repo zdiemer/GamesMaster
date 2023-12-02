@@ -132,9 +132,12 @@ class GameFaqsClient(ClientBase):
         super().__init__(
             validator,
             config,
-            RateLimit(1, DatePart.MINUTE),
+            RateLimit(
+                per=DatePart.HOUR,
+                range_req=(20, 100),
+            ),
             spoof_headers=True,
-            immediately_stop_not_ok=True,
+            immediately_stop_statuses=[403, 429],
         )
 
     async def _make_request(
@@ -378,7 +381,6 @@ class GameFaqsClient(ClientBase):
         return gf_game
 
     async def match_game(self, game: ExcelGame) -> List[GameMatch]:
-        self._rate_limiter.settings = RateLimit(random.randint(20, 100), DatePart.HOUR)
         results = await self.home_game_search(game.title)
         matches: List[GameMatch] = []
 
@@ -412,6 +414,18 @@ class GameFaqsClient(ClientBase):
                                 )
                             ],
                         )
+
+                    match.publisher_matched = self.validator.verify_component(
+                        game.publisher, [r.publisher.name for r in gf_game.releases]
+                    )
+
+                    match.developer_matched = self.validator.verify_component(
+                        game.developer, [gf_game.developer]
+                    )
+
+                    match.franchise_matched = self.validator.verify_component(
+                        game.franchise, [f.name for f in gf_game.franchises]
+                    )
 
                     matches.append(
                         GameMatch(

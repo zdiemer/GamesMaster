@@ -10,15 +10,21 @@ from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, List, Optional, Tuple, Union
 
 import aiohttp
+import aiohttp.client_exceptions
 from fake_headers import Headers
 
 from config import Config
 from excel_game import ExcelGame
 from game_match import GameMatch
+from logging_decorator import LoggingColor, LoggingDecorator
 from match_validator import MatchValidator
 
 
 class ResponseNotOkError(Exception):
+    pass
+
+
+class ImmediatelyStopStatusError(Exception):
     pass
 
 
@@ -37,6 +43,7 @@ class RateLimit:
     per: DatePart
     rate_limit_per_route: bool
     get_route_path: Optional[Callable[[str], str]]
+    range_req: Tuple[int, int]
 
     def __init__(
         self,
@@ -44,16 +51,32 @@ class RateLimit:
         per: DatePart = DatePart.SECOND,
         rate_limit_per_route: bool = False,
         get_route_path: Optional[Callable[[str], str]] = None,
+        range_req: Optional[Tuple[int, int]] = None,
     ):
         self.max_req = max_req
         self.per = per
         self.rate_limit_per_route = rate_limit_per_route
         self.get_route_path = get_route_path
+        self.range_req = range_req
+
+        if self.max_req <= 0:
+            raise ValueError("`max_req` must be a positive number greater than zero")
 
         if self.rate_limit_per_route and self.get_route_path is None:
             raise ValueError(
                 "Must specify `get_route_path` when `rate_limit_per_route` is True"
             )
+
+        if self.range_req is not None:
+            if self.range_req[0] >= self.range_req[1]:
+                raise ValueError(
+                    "When specifying `range_req`, first value "
+                    "must be smaller than the second value"
+                )
+            if self.range_req[0] <= 0:
+                raise ValueError(
+                    "`range_req` lower bound must be a positive number greater than zero"
+                )
 
 
 class ExponentialBackoff:
@@ -63,18 +86,21 @@ class ExponentialBackoff:
     _backoffs: int
 
     def __init__(
-        self, initial_backoff: int = 2, exponent: int = 2, max_backoffs: int = 2
+        self, initial_backoff: int = 2, exponent: int = 2, max_backoffs: int = 3
     ):
         self.backoff_seconds = initial_backoff
         self.exponent = exponent
         self.max_backoffs = max_backoffs
         self._backoffs = 0
 
-    async def backoff(self, url: str, status: int):
+    async def backoff(self, url: str, reason: Union[int, str]):
         if self._backoffs + 1 > self.max_backoffs:
             raise ResponseNotOkError
         logging.warning(
-            "Backing off for %ss for %s due to %s", self.backoff_seconds, url, status
+            "Backing off for %ss for %s due to %s",
+            LoggingDecorator.as_color(self.backoff_seconds, LoggingColor.RED),
+            url,
+            LoggingDecorator.as_color(reason, LoggingColor.RED),
         )
         await asyncio.sleep(self.backoff_seconds + random.random())
         self.backoff_seconds **= self.exponent
@@ -93,6 +119,11 @@ class RateLimiter:
     def seconds_between_requests(self) -> float:
         per = self.settings.per
         _max = self.settings.max_req
+
+        if self.settings.range_req is not None:
+            a, b = self.settings.range_req
+            _max = random.randint(a, b)
+
         if per == DatePart.SECOND:
             return 1.0 / _max
         if per == DatePart.MINUTE:
@@ -130,10 +161,14 @@ class RateLimiter:
 
         if next_call > utcnow:
             delta = next_call - utcnow
-            sleep_time_seconds = delta.seconds + (delta.microseconds / 1_000_000.0)
+            sleep_time_seconds = delta.total_seconds()
             if sleep_time_seconds >= 5.0:
                 logging.debug(
-                    "Throttling %ss for %s", f"{sleep_time_seconds:,.2f}", url
+                    "Throttling %ss for %s",
+                    LoggingDecorator.as_color(
+                        f"{sleep_time_seconds:,.2f}", LoggingColor.YELLOW
+                    ),
+                    url,
                 )
             await asyncio.sleep(sleep_time_seconds)
 
@@ -147,7 +182,7 @@ class ClientBase:
     __cached_headers: Optional[dict]
     __cached_responses: Dict[int, Union[Any, str]]
     __default_headers: Dict[str, str]
-    __immediately_stop_not_ok: bool
+    __immediately_stop_statuses: List[int]
     __next_headers: datetime
     __spoof_headers: bool
 
@@ -162,7 +197,7 @@ class ClientBase:
         config: Config = None,
         limit: RateLimit = RateLimit(),
         spoof_headers: bool = False,
-        immediately_stop_not_ok: bool = False,
+        immediately_stop_statuses: List[int] = None,
     ):
         self.validator = validator
         self._config = config or Config.create()
@@ -172,12 +207,21 @@ class ClientBase:
         self.__next_headers = datetime.utcnow()
         self.__cached_headers = None
         self.__cached_responses = {}
-        self.__immediately_stop_not_ok = immediately_stop_not_ok
+        self.__immediately_stop_statuses = immediately_stop_statuses or []
 
-    def _get_headers(self) -> dict:
+    def _get_headers(self, url: str) -> dict:
         if self.__cached_headers is None or datetime.utcnow() > self.__next_headers:
             new_headers = Headers().generate()
-            new_headers["Referer"] = "https://www.google.com/"
+            new_headers["Referer"] = random.choice(
+                [
+                    "https://www.google.com/",
+                    "https://www.bing.com/",
+                    "https://search.yahoo.com/",
+                    "https://duckduckgo.com/",
+                    urllib.parse.urljoin(url, urllib.parse.urlparse(url).path),
+                    "https://twitter.com/",
+                ]
+            )
             new_headers["Accept-Encoding"] = "gzip, deflate, br"
             new_headers["Accept-Language"] = "en-US,en;q=0.9,ja;q=0.8"
             new_headers[
@@ -186,7 +230,9 @@ class ClientBase:
             self.__cached_headers = new_headers
             logging.debug(
                 "Refreshing spoofed headers with User-Agent: %s",
-                self.__cached_headers.get("User-Agent"),
+                LoggingDecorator.as_color(
+                    self.__cached_headers.get("User-Agent"), LoggingColor.BLUE
+                ),
             )
             self.__next_headers = datetime.utcnow() + timedelta(
                 minutes=self.__SPOOF_HEADER_LIFETIME_MINUTES
@@ -225,24 +271,28 @@ class ClientBase:
             headers = (
                 self.__default_headers
                 if not self.__spoof_headers
-                else self._get_headers()
+                else self._get_headers(url)
             )
 
         backoff = ExponentialBackoff()
 
         async def do_req():
-            async with aiohttp.ClientSession() as session:
-                async with session.request(
-                    method, url, params=params, headers=headers, data=data
-                ) as res:
-                    if res.status != 200:
-                        if self.__immediately_stop_not_ok:
-                            raise ResponseNotOkError
-                        await backoff.backoff(res.url, res.status)
-                        return await do_req()
-                    res_val = await res.json() if json else await res.text()
-                    self.__cached_responses[req_hash] = res_val
-                    return res_val
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.request(
+                        method, url, params=params, headers=headers, data=data
+                    ) as res:
+                        if res.status != 200:
+                            if res.status in self.__immediately_stop_statuses:
+                                raise ImmediatelyStopStatusError
+                            await backoff.backoff(res.url, res.status)
+                            return await do_req()
+                        res_val = await res.json() if json else await res.text()
+                        self.__cached_responses[req_hash] = res_val
+                        return res_val
+            except (aiohttp.client_exceptions.ClientError, asyncio.TimeoutError) as exc:
+                await backoff.backoff(url, str(type(exc)))
+                return await do_req()
 
         return await self._rate_limiter.request(url, do_req)
 
@@ -282,8 +332,7 @@ class ClientBase:
             return (True, await self.match_game(game), None)
         except NotImplementedError:
             raise
-        except ResponseNotOkError:
-            if self.__immediately_stop_not_ok:
-                raise
+        except ImmediatelyStopStatusError:
+            raise
         except Exception as exc:
             return (False, None, "\n".join(traceback.format_exception(exc)))

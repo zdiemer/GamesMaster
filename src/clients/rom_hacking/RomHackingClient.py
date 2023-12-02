@@ -185,7 +185,7 @@ class RomHackingClient(ClientBase):
         )
 
         soup = BeautifulSoup(text, "html.parser")
-        results = soup.find_all("tr", {"class": "even", "class": "odd"})
+        results = soup.find_all("tr", {"class": ["even", "odd"]})
         matches: List[GameMatch] = []
 
         for res in results:
@@ -232,5 +232,15 @@ class RomHackingClient(ClientBase):
                         validation_info=match,
                     )
                 )
+
+        fully_playable_translations = list(
+            filter(
+                lambda m: m.match_info["category"] == Category.FULLY_PLAYABLE,
+                matches,
+            )
+        )
+
+        if any(fully_playable_translations):
+            return fully_playable_translations
 
         return matches

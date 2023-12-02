@@ -120,6 +120,37 @@ class GiantBombClient(ClientBase):
                         await self.get_release_years(res["id"], game.platform),
                     )
 
+                game_info = await self.game(res["guid"])
+                developers = []
+                publishers = []
+                franchises = []
+
+                if game_info.get("results"):
+                    if any(game_info["results"].get("developers") or []):
+                        developers.extend(
+                            d["name"] for d in game_info["results"]["developers"]
+                        )
+                    if any(game_info["results"].get("publishers") or []):
+                        publishers.extend(
+                            p["name"] for p in game_info["results"]["publishers"]
+                        )
+                    if any(game_info["results"].get("franchises") or []):
+                        franchises.extend(
+                            f["name"] for f in game_info["results"]["franchises"]
+                        )
+
+                match.developer_matched = self.validator.verify_component(
+                    game.developer, developers
+                )
+
+                match.publisher_matched = self.validator.verify_component(
+                    game.publisher, publishers
+                )
+
+                match.franchise_matched = self.validator.verify_franchise(
+                    game.franchise, franchises
+                )
+
                 matches.append(
                     GameMatch(
                         res["name"], res["site_detail_url"], res["guid"], res, match

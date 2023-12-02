@@ -6,12 +6,12 @@ release years.
 """
 
 import html
-import re
-import roman
 import unicodedata
-from typing import Dict, List
+import re
+from typing import Dict, List, Optional
 
 import edit_distance
+import roman
 
 from excel_game import ExcelGame
 from constants import PLATFORM_NAMES
@@ -34,6 +34,9 @@ class ValidationInfo:
     exact: bool
     platform_matched: bool
     date_matched: bool
+    publisher_matched: bool
+    developer_matched: bool
+    franchise_matched: bool
 
     def __init__(
         self,
@@ -41,11 +44,17 @@ class ValidationInfo:
         exact: bool = False,
         platform_matched: bool = False,
         date_matched: bool = False,
+        publisher_matched: bool = False,
+        developer_matched: bool = False,
+        franchise_matched: bool = False,
     ):
         self.matched = matched
         self.exact = exact
         self.platform_matched = platform_matched
         self.date_matched = date_matched
+        self.publisher_matched = publisher_matched
+        self.developer_matched = developer_matched
+        self.franchise_matched = franchise_matched
 
     @property
     def likely_match(self):
@@ -60,6 +69,34 @@ class ValidationInfo:
         guarantee that this is an exact title match.
         """
         return self.matched and self.platform_matched and self.date_matched
+
+    @property
+    def components_matched(self):
+        """Returns whether additional components not required for full match matched
+
+        This method checks whether all components have matched, regardless of
+        whether they were required for validating a full match.
+        """
+        return (
+            self.publisher_matched and self.developer_matched and self.franchise_matched
+        )
+
+    @property
+    def match_score(self):
+        """Returns a score for this match
+
+        This method checks whether all components have matched, regardless of
+        whether they were required for validating a full match.
+        """
+        return (
+            int(self.matched) * 5
+            + int(self.exact) * 5
+            + int(self.platform_matched)
+            + int(self.date_matched)
+            + int(self.publisher_matched)
+            + int(self.developer_matched)
+            + int(self.franchise_matched)
+        )
 
     def __str__(self) -> str:
         return str(self.__dict__)
@@ -242,6 +279,9 @@ class MatchValidator:
         title: str,
         platforms: List[str] = None,
         release_years: List[int] = None,
+        publishers: List[str] = None,
+        developers: List[str] = None,
+        franchises: List[str] = None,
     ) -> ValidationInfo:
         """Validates a potential matches characteristics against a row.
 
@@ -277,6 +317,9 @@ class MatchValidator:
             exact=normal_equal,
             platform_matched=platform_equal,
             date_matched=year_equal,
+            developer_matched=self.verify_component(game.developer, developers),
+            publisher_matched=self.verify_component(game.publisher, publishers),
+            franchise_matched=self.verify_franchise(game.franchise, franchises),
         )
 
     def verify_platform(self, platform: str, platforms: List[str]) -> bool:
@@ -315,3 +358,36 @@ class MatchValidator:
             Boolean indicating whether release year was contained in release years
         """
         return release_year in release_years
+
+    def verify_component(self, component: str, components: List[str]) -> bool:
+        """Verifies whether a component's normalized form equals any in components.
+
+        This methods ensures that a given component matches any components.
+
+        Args:
+            component: The company to check
+            components: The components to check against
+
+        Returns:
+            Boolean indicating whether normalized component was contained in components
+        """
+        if components is None or not any(components):
+            return False
+
+        normalized_component = self.normalize(component)
+
+        return any(normalized_component == self.normalize(c) for c in components)
+
+    def verify_franchise(
+        self, franchise: Optional[str], franchises: Optional[List[str]]
+    ) -> bool:
+        if not any(franchises or []) and not franchise:
+            return True
+
+        return self.verify_component(franchise, franchises)
+
+    def check_platform_alias_is_mapped(self, platform: str) -> bool:
+        platform = platform.lower()
+        return platform in PLATFORM_NAMES or any(
+            platform in p for p in PLATFORM_NAMES.values()
+        )

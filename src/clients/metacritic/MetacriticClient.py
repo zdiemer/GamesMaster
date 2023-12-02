@@ -180,6 +180,53 @@ class MetacriticClient(ClientBase):
                     p_score["url"] = f"{self.__BASE_METACRITIC_URL}{p_score['url']}"
                     u_score["url"] = f"{self.__BASE_METACRITIC_URL}{u_score['url']}"
 
+                    if (
+                        "production" in critic_reviews["data"]["item"]
+                        and "companies" in critic_reviews["data"]["item"]["production"]
+                    ):
+                        companies = critic_reviews["data"]["item"]["production"][
+                            "companies"
+                        ]
+
+                        match.developer_matched = validator.verify_component(
+                            game.developer,
+                            list(
+                                c["name"]
+                                for c in filter(
+                                    lambda c: c["typeName"] == "Developer",
+                                    companies,
+                                )
+                            ),
+                        )
+
+                        match.publisher_matched = validator.verify_component(
+                            game.publisher,
+                            list(
+                                c["name"]
+                                for c in filter(
+                                    lambda c: c["typeName"] == "Publisher",
+                                    companies,
+                                )
+                            ),
+                        )
+
+                    if (
+                        "gameTaxonomy" in critic_reviews["data"]["item"]
+                        and "franchises"
+                        in critic_reviews["data"]["item"]["gameTaxonomy"]
+                    ):
+                        match.franchise_matched = validator.verify_franchise(
+                            game.franchise,
+                            [
+                                f["name"]
+                                for f in critic_reviews["data"]["item"]["gameTaxonomy"][
+                                    "franchises"
+                                ]
+                            ],
+                        )
+                    elif not game.franchise:
+                        match.franchise_matched = True
+
                     metacritic_info = {
                         "critics": p_score,
                         "users": u_score,
