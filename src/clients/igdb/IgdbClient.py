@@ -48,10 +48,12 @@ class IgdbClient(ClientBase):
             await self._authorize()
 
         return await self.post(
-            f"{self.__BASE_IGDB_URL}/{route}", headers=self._get_headers(), data=data
+            f"{self.__BASE_IGDB_URL}/{route}",
+            headers=self._get_igdb_headers(),
+            data=data,
         )
 
-    def _get_headers(self):
+    def _get_igdb_headers(self):
         if self.__access_token is None:
             raise RuntimeError
         return {
@@ -119,9 +121,6 @@ class IgdbClient(ClientBase):
                 release_years.append(
                     datetime.fromtimestamp(date_response[0]["date"]).year
                 )
-
-            if game.release_date is not None and not any(release_years):
-                continue
 
             ic_responses = []
 

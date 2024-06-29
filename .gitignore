@@ -16,3 +16,5 @@ app/db/03_parsed_data.sql
 # django
 game_manager/data/*
 game_manager/db.*
+
+.vscode/*

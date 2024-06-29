@@ -1,10 +1,15 @@
-import logging
-import random
+"""A client for scraping game data from GameFAQs.
+
+This file implements a class that is able to scrape GameFAQs for
+game information, matching against desired inputs, and returning the
+matches as structured output.
+"""
+
 import re
 from datetime import datetime
 from typing import Any, Dict, List
 
-from bs4 import BeautifulSoup, element, ResultSet
+from bs4 import BeautifulSoup, element
 
 from clients import ClientBase, DatePart, RateLimit
 from config import Config
@@ -25,6 +30,18 @@ from .game_faqs_types import (
 
 
 class GameFaqsClient(ClientBase):
+    """Client for fetching game information from GameFAQs.
+
+    This class implements multiple routes for fetching information from
+    GameFAQs, including exposing internal API functionality and fetching
+    direct HTML pages.
+
+    Attributes:
+        __BASE_GAMEFAQS_URL: The base URL to use for requests
+        __PLATFORM_TO_URL_PART: Maps platform name to URL slug on GameFAQs
+        __PERCENT_CHANCE_DISGUISE_TRAFFIC: A percent chance to make a disguised request
+    """
+
     __BASE_GAMEFAQS_URL = "https://gamefaqs.gamespot.com"
     __PLATFORM_TO_URL_PART = {
         "3do": "3do",
@@ -83,7 +100,7 @@ class GameFaqsClient(ClientBase):
         "nintendo switch": "switch",
         "nintendo wii": "wii",
         "nintendo wii u": "wiiu",
-        "oculus quest": "oculusquest",
+        "oculus quest": "meta-quest",
         "ouya": "ouya",
         "pc": "pc",
         "pc-fx": "pcfx",
@@ -97,6 +114,7 @@ class GameFaqsClient(ClientBase):
         "playstation 5": "ps5",
         "playstation portable": "psp",
         "playstation vita": "vita",
+        "playstation network": "ps4",
         "playdate": "playdate",
         "snes": "snes",
         "sega 32x": "sega32x",
@@ -124,8 +142,8 @@ class GameFaqsClient(ClientBase):
         "zx spectrum": "sinclair",
         "zeebo": "zeebo",
         "ios": "iphone",
+        "trs-80 color computer": "coco",
     }
-    __PERCENT_CHANCE_DISGUISE_TRAFFIC = 0.20
 
     def __init__(self, validator: MatchValidator, config: Config = None):
         config = config or Config.create()
@@ -134,40 +152,77 @@ class GameFaqsClient(ClientBase):
             config,
             RateLimit(
                 per=DatePart.HOUR,
-                range_req=(20, 100),
+                range_req=(20, 60),
             ),
             spoof_headers=True,
-            immediately_stop_statuses=[403, 429],
+            immediately_stop_statuses=[401, 403, 429],
         )
 
     async def _make_request(
         self, route: str, params: Dict = None, as_json: bool = True
-    ):
+    ) -> Any:
+        """Internal method for requesting for GameFAQs"""
         url = f"{self.__BASE_GAMEFAQS_URL}/{route}"
         return await self.get(url, params=params, json=as_json)
 
-    async def _disguise(self, a_tags: ResultSet[Any]):
-        if any(a_tags):
-            rand_a = random.sample(a_tags, k=1)[0]
-            href = str(rand_a["href"]).replace("/", "", 1)
-            logging.debug(
-                "Disguising traffic with %s/%s", self.__BASE_GAMEFAQS_URL, href
-            )
-            await self._make_request(href, as_json=False)
+    async def home_game_search(self, term: str) -> Dict[str, Any]:
+        """Performs a search for a term using GameFAQs's internal API.
 
-    async def home_game_search(self, term: str):
+        This method will use GameFAQs's internal home_game_search route
+        to search for a specified search term, returning a JSON object.
+
+        Args:
+            term: A search term
+
+        Returns:
+            A JSON object containing search results
+        """
         return await self._make_request("ajax/home_game_search", {"term": term})
 
     async def game_page(self, url: str):
+        """Request a game page using the specified URL.
+
+        This method will return the raw HTML of a given URL, specifically
+        used for game pages.
+
+        Args:
+            url: The game page's URL
+
+        Returns:
+            An HTML string for the game page
+        """
         return await self._make_request(url, as_json=False)
 
     async def release_data_page(self, url: str):
+        """Request a game's release data page using the specified URL.
+
+        This method will return the raw HTML of a given game URL's release
+        data subpage.
+
+        Args:
+            url: The game page's URL
+
+        Returns:
+            An HTML string for the game's release data page
+        """
         return await self._make_request(f"{url}/data", as_json=False)
 
     async def guides_page(self, url: str):
+        """Request a game's guides page using the specified URL.
+
+        This method will return the raw HTML of a given game URL's guides
+        subpage.
+
+        Args:
+            url: The game page's URL
+
+        Returns:
+            An HTML string for the game's guides page
+        """
         return await self._make_request(f"{url}/faqs", as_json=False)
 
-    async def get_guides(self, url: str) -> List[GameFaqsGuide]:
+    async def __get_guides(self, url: str) -> List[GameFaqsGuide]:
+        """Internal method for fetching all guides from a guides page"""
         html = await self.guides_page(url)
 
         soup = BeautifulSoup(html, "html.parser")
@@ -245,7 +300,8 @@ class GameFaqsClient(ClientBase):
 
         return guides
 
-    async def get_gamefaqs_game(self, match: Dict, platform: str) -> GameFaqsGame:
+    async def __get_gamefaqs_game(self, match: Dict, platform: str) -> GameFaqsGame:
+        """Internal method for fetching info on a game from a game page"""
         url = match["board_url"].replace(
             "boards", self.__PLATFORM_TO_URL_PART[platform.lower()]
         )[1:]
@@ -256,12 +312,9 @@ class GameFaqsClient(ClientBase):
         game_info = soup.find("div", {"class": "pod_gameinfo"})
         infos = game_info.find_all("div", {"class": "content"})
 
-        if random.random() <= self.__PERCENT_CHANCE_DISGUISE_TRAFFIC:
-            await self._disguise(soup.find_all("a", href=True))
-
         gf_game = GameFaqsGame()
         gf_game.id = int(match["game_id"])
-        gf_game.url = f"{self.__BASE_GAMEFAQS_URL}{url}"
+        gf_game.url = f"{self.__BASE_GAMEFAQS_URL}/{url}"
         gf_game.title = soup.find("h1", {"class": "page-title"}).text.strip()
 
         for i in infos:
@@ -364,19 +417,22 @@ class GameFaqsClient(ClientBase):
                         release.release_year = date.year
                     elif value == "Canceled":
                         release.status = GameFaqsReleaseStatus.CANCELED
-                    elif value == "TBA":
+                    elif "TBA" in str(value):
                         release.status = GameFaqsReleaseStatus.UNRELEASED
                     else:
-                        date: datetime = datetime.strptime(value, "%B %Y")
-                        release.release_month = date.month
-                        release.release_year = date.year
+                        try:
+                            date: datetime = datetime.strptime(value, "%B %Y")
+                            release.release_month = date.month
+                            release.release_year = date.year
+                        except ValueError:
+                            release.status = GameFaqsReleaseStatus.UNRELEASED
                 elif idx == 5:
                     release.age_rating = value
 
             releases.append(release)
 
         gf_game.releases = releases
-        gf_game.guides = await self.get_guides(url)
+        # gf_game.guides = await self.__get_guides(url)
 
         return gf_game
 
@@ -399,7 +455,7 @@ class GameFaqsClient(ClientBase):
                 )
 
                 if match.likely_match:
-                    gf_game = await self.get_gamefaqs_game(res, game.platform)
+                    gf_game = await self.__get_gamefaqs_game(res, game.platform)
 
                     if not match.date_matched:
                         match.date_matched = self.validator.verify_release_year(
@@ -416,15 +472,17 @@ class GameFaqsClient(ClientBase):
                         )
 
                     match.publisher_matched = self.validator.verify_component(
-                        game.publisher, [r.publisher.name for r in gf_game.releases]
+                        game.publisher,
+                        [r.publisher.name for r in (gf_game.releases or [])],
                     )
 
                     match.developer_matched = self.validator.verify_component(
-                        game.developer, [gf_game.developer]
+                        game.developer,
+                        [gf_game.developer] if gf_game.developer is not None else None,
                     )
 
                     match.franchise_matched = self.validator.verify_component(
-                        game.franchise, [f.name for f in gf_game.franchises]
+                        game.franchise, [f.name for f in (gf_game.franchises or [])]
                     )
 
                     matches.append(

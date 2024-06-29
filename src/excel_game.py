@@ -4,6 +4,9 @@ This file contains classes which are meant to wrap the contents
 of the Excel file.
 """
 
+import datetime
+import json
+import statistics
 from enum import Enum
 from typing import Optional
 
@@ -21,6 +24,42 @@ class ExcelRegion(Enum):
     JAPAN = "JP"
     KOREA = "KO"
     NORTH_AMERICA = "NA"
+
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
+
+class TranslationStatus(Enum):
+    NONE = 0
+    PARTIAL = 1
+    COMPLETE = 2
+
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
+
+class PlayingStatus(Enum):
+    STALLED = 0
+    PLAYING = 1
+    UPCOMING = -1
+
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
+
+class Playability(Enum):
+    UNKNOWN = 0
+    PLAYABLE = 1
+    UNPLAYABLE = -1
 
     def __str__(self) -> str:
         return self.name
@@ -52,53 +91,157 @@ class ExcelGame:
     id: int
     title: str
     platform: str
-    release_date: Optional[pd.DatetimeIndex]
+    release_date: Optional[datetime.datetime]
     release_region: ExcelRegion
     publisher: str
     developer: str
-    franchise: str
+    franchise: Optional[str]
     genre: str
     notes: str
     owned_format: str
+    estimated_playtime: Optional[float]
+    completed: bool
+    priority: Optional[int]
+    metacritic_rating: Optional[float]
+    gamefaqs_rating: Optional[float]
+    dlc: bool
+    owned: bool
+    translation: Optional[TranslationStatus]
+    vr: bool
+    playing_status: Optional[PlayingStatus]
+    date_purchased: Optional[datetime.datetime]
+    purchase_price: Optional[float]
+    playability: Playability
+    completion_time: Optional[float]
+
+    release_year: Optional[int]
+    full_name: str
+    combined_rating: float
+    dollar_per_hour: float
+    normal_title: str
+
+    group_metadata: Optional[str] = None
 
     def __init__(
         self,
         id: int,
         title: str,
         platform: str,
-        release_date: pd.DatetimeIndex,
+        release_date: Optional[datetime.datetime],
         release_region: ExcelRegion,
         publisher: str,
         developer: str,
-        franchise: str,
+        franchise: Optional[str],
         genre: str,
         notes: str,
         owned_format: str,
+        estimated_playtime: Optional[float],
+        completed: bool,
+        priority: Optional[int],
+        metacritic_rating: Optional[float],
+        gamefaqs_rating: Optional[float],
+        dlc: Optional[bool],
+        owned: Optional[bool],
+        translation: Optional[TranslationStatus],
+        vr: Optional[bool],
+        playing_status: Optional[PlayingStatus],
+        date_purchased: Optional[datetime.datetime],
+        purchase_price: Optional[float],
+        rating: Optional[float],
+        playability: Playability,
+        completion_time: Optional[float],
     ):
-        self.id = id
+        self.id = int(id)
         self.title = str(title)
-        self.platform = platform
+        self.platform = str(platform)
         self.release_date = release_date
         self.release_region = release_region
-        self.publisher = publisher
-        self.developer = developer
-        self.franchise = franchise
-        self.genre = genre
-        self.notes = notes
+        self.publisher = str(publisher)
+        self.developer = str(developer)
+        self.franchise = None if str(franchise).strip() == "" else str(franchise)
+        self.genre = str(genre)
+        self.notes = str(notes)
         self.owned_format = owned_format
+        self.estimated_playtime = (
+            None if str(estimated_playtime).strip() == "" else float(estimated_playtime)
+        )
+        self.completed = bool(completed)
+        self.priority = None if str(priority).strip() == "" else int(priority)
+        self.metacritic_rating = (
+            None if str(metacritic_rating).strip() == "" else float(metacritic_rating)
+        )
+        self.gamefaqs_rating = (
+            None if str(gamefaqs_rating).strip() == "" else float(gamefaqs_rating)
+        )
+        self.dlc = dlc is not None and bool(dlc)
+        self.owned = bool(owned)
+        self.translation = translation
+        self.vr = vr is not None and bool(vr)
+        self.playing_status = playing_status
+        self.date_purchased = date_purchased
+        self.purchase_price = (
+            None if str(purchase_price).strip() == "" else float(purchase_price)
+        )
+        self.rating = None if str(rating).strip() == "" else float(rating)
+        self.playability = playability
+        self.completion_time = (
+            None if str(completion_time).strip() == "" else float(completion_time)
+        )
 
-    @property
-    def release_year(self) -> Optional[int]:
-        """Property to fetch a game's release year or None if it's Early Access"""
-        return self.release_date.year if self.release_date is not None else None
+        # Computed Properties
 
-    @property
-    def full_name(self) -> str:
-        """Property to return a game's full name including platform and release year"""
-        return f"{self.title} ({self.platform}) [{self.release_year or 'Early Access'}]"
+        self.release_year = (
+            self.release_date.year if self.release_date is not None else None
+        )
+
+        self.full_name = (
+            f"{self.title} ({self.platform}) [{self.release_year or 'Early Access'}]"
+        )
+
+        self.combined_rating = statistics.mean(
+            list(
+                filter(
+                    lambda x: x is not None,
+                    [
+                        self.rating or self.priority / 5,
+                        self.metacritic_rating,
+                        self.gamefaqs_rating,
+                    ],
+                )
+            )
+        )
+
+        self.dollar_per_hour = (
+            ((self.purchase_price or 0) / self.estimated_playtime)
+            if self.estimated_playtime is not None
+            else 0
+        )
+
+        self.normal_title = (
+            str.casefold(self.title)
+            .removeprefix("the ")
+            .removeprefix("a ")
+            .removeprefix("an ")
+        )
 
     def __str__(self) -> str:
-        return str(self.__dict__)
+        return json.dumps(self.__dict__, sort_keys=True, indent=4, default=str)
 
     def __repr__(self) -> str:
         return self.__str__()
+
+    def __hash__(self):
+        return hash(
+            (
+                self.title,
+                self.platform,
+                self.release_date,
+                self.publisher,
+                self.developer,
+                self.franchise,
+                self.genre,
+            )
+        )
+
+    def __eq__(self, other):
+        return hash(self) == hash(other)

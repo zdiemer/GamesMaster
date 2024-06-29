@@ -20,8 +20,8 @@ class GiantBombClient(ClientBase):
             validator,
             config,
             RateLimit(
-                200,
-                DatePart.HOUR,
+                60,
+                DatePart.MINUTE,
                 rate_limit_per_route=True,
                 get_route_path=lambda s: urllib.parse.urlparse(s).path.split("/")[2],
             ),
@@ -31,9 +31,11 @@ class GiantBombClient(ClientBase):
     async def _make_request(
         self,
         route: str = "",
-        params: Dict[str, Any] = {},
+        params: Dict[str, Any] = None,
         api_detail_url: str = None,
     ) -> Any:
+        params = params or {}
+
         if params.get("api_key") is None:
             params["api_key"] = self.__api_key
 
@@ -54,7 +56,10 @@ class GiantBombClient(ClientBase):
     async def release(self, guid: str) -> Any:
         return await self._make_request(f"release/{guid}")
 
-    async def releases(self, game_id: int):
+    async def concept(self, guid: str) -> Any:
+        return await self._make_request(f"concept/{guid}")
+
+    async def releases(self, game_id: int) -> Any:
         return await self._make_request(
             "releases", params={"filter": f"game:{game_id}"}
         )

@@ -45,9 +45,11 @@ class Config:
             A Config object
         """
         version = ""
-        with open("static/version", "r", encoding="utf-8") as file:
+        with open("D:/Code/GameMaster/static/version", "r", encoding="utf-8") as file:
             version = file.read()
-        with open("static/config.json", "r", encoding="utf-8") as file:
+        with open(
+            "D:/Code/GameMaster/static/config.json", "r", encoding="utf-8"
+        ) as file:
             config = json.loads(file.read())
             return Config(
                 config["mobyGamesApiKey"],

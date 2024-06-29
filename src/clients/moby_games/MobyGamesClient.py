@@ -1,6 +1,3 @@
-from __future__ import annotations
-
-import datetime
 import html
 from typing import Dict, List, Literal
 
@@ -9,19 +6,26 @@ from config import Config
 from excel_game import ExcelGame
 from game_match import GameMatch
 from match_validator import MatchValidator
-from .moby_games_types import *
+from .moby_games_types import *  # pylint: disable=unused-wildcard-import,wildcard-import
 
 
 class MobyGamesClient(ClientBase):
     __BASE_MOBYGAMES_SEARCH_URL = "https://api.mobygames.com/v1"
     __api_key: str
 
-    def __init__(self, validator: MatchValidator, config: Config = None):
+    def __init__(
+        self,
+        validator: MatchValidator,
+        config: Config = None,
+        rate_limit: RateLimit = None,
+    ):
         config = config or Config.create()
-        super().__init__(validator, config, RateLimit(360, DatePart.HOUR))
+        super().__init__(validator, config, rate_limit or RateLimit(360, DatePart.HOUR))
         self.__api_key = self._config.moby_games_api_key
 
-    async def _make_request(self, route: str, params: Dict = {}) -> any:
+    async def _make_request(self, route: str, params: Dict = None) -> any:
+        params = params or {}
+
         if params.get("api_key") is None:
             params["api_key"] = self.__api_key
 
@@ -63,37 +67,39 @@ class MobyGamesClient(ClientBase):
 
     async def games(
         self,
-        game_ids: List[int] = [],
+        game_ids: List[int] = None,
         limit: int = 100,
         offset: int = 0,
-        platform_ids: List[int] = [],
-        genre_ids: List[int] = [],
-        group_ids: List[int] = [],
+        platform_ids: List[int] = None,
+        genre_ids: List[int] = None,
+        group_ids: List[int] = None,
         title: str = "",
-        format: Literal["id", "brief", "normal"] = "normal",
+        return_format: Literal["id", "brief", "normal"] = "normal",
     ) -> List[Game]:
         res = await self._make_request(
             "games",
             {
-                "id": game_ids,
+                "id": game_ids or [],
                 "limit": limit,
                 "offset": offset,
-                "platform": platform_ids,
-                "genre": genre_ids,
-                "group": group_ids,
+                "platform": platform_ids or [],
+                "genre": genre_ids or [],
+                "group": group_ids or [],
                 "title": title,
-                "format": format,
+                "format": return_format,
             },
         )
 
         return [
             Game(
-                [
-                    AlternateTitle(alt["description"], alt["title"])
-                    for alt in game["alternative_titles"]
-                ]
-                if game.get("alternative_titles") is not None
-                else [],
+                (
+                    [
+                        AlternateTitle(alt["description"], alt["title"])
+                        for alt in game["alternate_titles"]
+                    ]
+                    if game.get("alternate_titles") is not None
+                    else []
+                ),
                 game["description"],
                 game["game_id"],
                 [
@@ -117,15 +123,17 @@ class MobyGamesClient(ClientBase):
                     )
                     for platform in game["platforms"]
                 ],
-                Cover(
-                    game["sample_cover"]["height"],
-                    game["sample_cover"]["image"],
-                    game["sample_cover"]["platforms"],
-                    game["sample_cover"]["thumbnail_image"],
-                    game["sample_cover"]["width"],
-                )
-                if game.get("sample_cover") is not None
-                else None,
+                (
+                    Cover(
+                        game["sample_cover"]["height"],
+                        game["sample_cover"]["image"],
+                        game["sample_cover"]["platforms"],
+                        game["sample_cover"]["thumbnail_image"],
+                        game["sample_cover"]["width"],
+                    )
+                    if game.get("sample_cover") is not None
+                    else None
+                ),
                 [
                     Screenshot(
                         screenshot["caption"],

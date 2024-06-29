@@ -15,7 +15,7 @@ class MetacriticClient(ClientBase):
     __API_KEY = "1MOZgmNFxvmljaQR1X9KAij9Mo4xAY3u"
 
     __BASE_FANDOM_METACRITIC_URL = (
-        "https://fandom-prod.apigee.net/v1/xapi/composer/metacritic/pages"
+        "https://internal-prod.apigee.fandom.net/v1/xapi/composer/metacritic/pages"
     )
 
     __BASE_METACRITIC_URL = "https://www.metacritic.com"
@@ -175,10 +175,12 @@ class MetacriticClient(ClientBase):
                         resp, "user-score-summary"
                     )
 
-                    u_score = user_reviews["data"]["item"]
+                    u_score = (user_reviews.get("data") or {}).get("item")
+
+                    if u_score is not None:
+                        u_score["url"] = f"{self.__BASE_METACRITIC_URL}{u_score['url']}"
 
                     p_score["url"] = f"{self.__BASE_METACRITIC_URL}{p_score['url']}"
-                    u_score["url"] = f"{self.__BASE_METACRITIC_URL}{u_score['url']}"
 
                     if (
                         "production" in critic_reviews["data"]["item"]

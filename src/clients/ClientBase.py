@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import pickle
 import random
 import traceback
 import urllib.parse
@@ -191,6 +192,8 @@ class ClientBase:
 
     validator: MatchValidator
 
+    CACHE_FILE_NAME = "cache.pkl"
+
     def __init__(
         self,
         validator: MatchValidator,
@@ -224,9 +227,9 @@ class ClientBase:
             )
             new_headers["Accept-Encoding"] = "gzip, deflate, br"
             new_headers["Accept-Language"] = "en-US,en;q=0.9,ja;q=0.8"
-            new_headers[
-                "Accept"
-            ] = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+            new_headers["Accept"] = (
+                "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+            )
             self.__cached_headers = new_headers
             logging.debug(
                 "Refreshing spoofed headers with User-Agent: %s",
@@ -291,7 +294,8 @@ class ClientBase:
                         self.__cached_responses[req_hash] = res_val
                         return res_val
             except (aiohttp.client_exceptions.ClientError, asyncio.TimeoutError) as exc:
-                await backoff.backoff(url, str(type(exc)))
+                print(exc)
+                await backoff.backoff(url, type(exc).__name__)
                 return await do_req()
 
         return await self._rate_limiter.request(url, do_req)
@@ -317,10 +321,13 @@ class ClientBase:
             "POST", url, params=params, headers=headers, data=data, json=json
         )
 
-    async def match_game(self, game: ExcelGame) -> List[GameMatch]:
+    async def match_game_with_cache(self, game: ExcelGame) -> List[GameMatch]:
+        pass
+
+    async def match_game(self, _: ExcelGame) -> List[GameMatch]:
         raise NotImplementedError
 
-    def should_skip(self, game: ExcelGame) -> bool:
+    def should_skip(self, _: ExcelGame) -> bool:
         return False
 
     async def try_match_game(
@@ -334,5 +341,5 @@ class ClientBase:
             raise
         except ImmediatelyStopStatusError:
             raise
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
             return (False, None, "\n".join(traceback.format_exception(exc)))

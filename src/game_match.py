@@ -21,6 +21,7 @@ class DataSource(Enum):
     PRICE_CHARTING = 9
     VG_CHARTZ = 10
     GAMEYE = 11
+    GAME_JOLT = 12
 
     def __str__(self) -> str:
         return self.name
@@ -53,13 +54,13 @@ class GameMatch:
         self,
         title: str,
         url: Optional[str] = None,
-        id: Optional[int] = None,
+        game_id: Optional[int] = None,
         match_info: Optional[Any] = None,
         validation_info: Optional[ValidationInfo] = None,
     ):
         self.title = title
         self.url = url
-        self.id = id
+        self.id = game_id
         self.match_info = match_info
         self.validation_info = validation_info
 

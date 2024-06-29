@@ -13,10 +13,11 @@ Typical usage:
 import asyncio
 import logging
 import math
+import os
 import sys
 import traceback
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Set
+from typing import Any, Dict, List, Optional, Tuple, Type, Set
 
 import jsonpickle
 import pandas as pd
@@ -24,9 +25,16 @@ from howlongtobeatpy import HowLongToBeat, HowLongToBeatEntry
 from steam import Steam
 
 import clients
+import clients.game_faqs
 from config import Config
 from game_match import DataSource, GameMatch, GameMatchResult, GameMatchResultSet
-from excel_game import ExcelGame, ExcelRegion as Region
+from excel_game import (
+    ExcelGame,
+    ExcelRegion as Region,
+    Playability,
+    PlayingStatus,
+    TranslationStatus,
+)
 from logging_decorator import LoggingColor, LoggingDecorator
 from match_validator import MatchValidator
 
@@ -69,7 +77,7 @@ class SteamWrapper(clients.ClientBase):
             try:
                 results = await self._rate_limiter.request("steam", do_search)
                 should_retry = False
-            except Exception:
+            except Exception:  # pylint: disable=broad-except
                 retries += 1
                 should_retry = True
 
@@ -118,7 +126,7 @@ class HLTBWrapper(clients.ClientBase):
             try:
                 results = await self._rate_limiter.request("hltb", do_search)
                 should_retry = False
-            except Exception:
+            except Exception:  # pylint: disable=broad-except
                 retries += 1
                 should_retry = True
 
@@ -193,6 +201,7 @@ class ExcelParser:
         DataSource.PRICE_CHARTING: clients.PriceChartingClient,
         DataSource.VG_CHARTZ: clients.VgChartzClient,
         DataSource.GAMEYE: clients.GameyeClient,
+        DataSource.GAME_JOLT: clients.GameJoltClient,
     }
 
     config: Config
@@ -204,24 +213,34 @@ class ExcelParser:
 
     def __init__(self, enabled_clients: Set[DataSource] = None):
         self.config = Config.create()
-        self.games = self._parse_excel()
+        self.games = self.__parse_excel()
         self.games["Id"] = self.games.index + 1
         self.enabled_clients = enabled_clients or set(self._ALL_CLIENTS.keys())
         self.__validator = MatchValidator()
         logging.basicConfig(
             stream=sys.stdout,
-            level=logging.DEBUG,
+            level=logging.WARN,
             format="%(levelname)s %(asctime)s - %(message)s",
             datefmt="%y-%m-%d %I:%M:%S %p",
         )
 
-    def _parse_excel(self, sheet: str = "Games") -> pd.DataFrame:
+    def __parse_excel(self, sheet: str = "Games") -> pd.DataFrame:
         """Internal method for parsing Excel to a pandas.DataFrame"""
         return pd.read_excel(
             "static/games.xlsx", sheet_name=sheet, keep_default_na=False
         )
 
-    def row_to_game(self, row: pd.Series) -> ExcelGame:
+    def __row_to_game(self, row: pd.Series) -> ExcelGame:
+        """Converts a Pandas row into an ExcelGame object.
+
+        Given a row from the base spreadsheet, converts into a Python object.
+
+        Args:
+            row: A Pandas series representing a row in the spreadsheet
+
+        Returns:
+            An ExcelGame object representation of the given row
+        """
         return ExcelGame(
             row["Id"],
             row["Title"],
@@ -234,9 +253,37 @@ class ExcelParser:
             row["Genre"],
             row["Notes"],
             row["Format"],
+            row["Estimated Time"],
+            row["Completed"],
+            row["Priority"],
+            row["Metacritic Rating"],
+            row["GameFAQs User Rating"],
+            row["DLC"],
+            row["Owned"],
+            (
+                TranslationStatus(row["English"])
+                if row["English"] is not None and str(row["English"]).strip() != ""
+                else None
+            ),
+            row["VR"],
+            (
+                PlayingStatus(row["Playing Status"])
+                if row["Playing Status"] is not None
+                and str(row["Playing Status"]).strip() != ""
+                else None
+            ),
+            (
+                row["Date Purchased"]
+                if str(row["Date Purchased"]).strip() != ""
+                else None
+            ),
+            row["Purchase Price"],
+            row["Rating"],
+            Playability(row["Playable"]),
+            row["Completion Time"],
         )
 
-    async def get_matches_for_source(
+    async def __get_matches_for_source(
         self,
         source: DataSource,
         games_override: Optional[pd.DataFrame] = None,
@@ -293,13 +340,13 @@ class ExcelParser:
                 LoggingColor.BRIGHT_BLUE,
             ),
             LoggingDecorator.as_color(
-                f"{(float(offset or 1) / total_rows)*100:.2f}",
+                f"{(float(offset) / total_rows)*100:.2f}",
                 LoggingColor.BRIGHT_BLUE,
             ),
         )
 
         for i, row in games.iloc[offset : offset + batch_size].iterrows():
-            game = self.row_to_game(row)
+            game = self.__row_to_game(row)
 
             try:
                 success, game_matches, exc = await client.try_match_game(game)
@@ -309,7 +356,7 @@ class ExcelParser:
             ) as exc:
                 results.errors.extend(
                     [
-                        GameMatchResult(self.row_to_game(r[1]), error=exc)
+                        GameMatchResult(self.__row_to_game(r[1]), error=exc)
                         for r in games.iloc[i:].iterrows()
                     ]
                 )
@@ -318,11 +365,21 @@ class ExcelParser:
             processed_count += 1
 
             if success and game_matches is not None:
-                gmr = GameMatchResult(game, self.filter_matches(game_matches))
+                gmr = GameMatchResult(game, self.__filter_matches(game_matches))
                 results.successes.append(gmr)
 
             if not success:
                 results.errors.append(GameMatchResult(game, error=exc))
+                logging.error(
+                    ("%s (batch %s/%s): Error processing %s - %s"),
+                    LoggingDecorator.as_color(source, LoggingColor.BRIGHT_CYAN),
+                    LoggingDecorator.as_color(batch_no, LoggingColor.BRIGHT_CYAN),
+                    LoggingDecorator.as_color(total_batches, LoggingColor.BRIGHT_CYAN),
+                    LoggingDecorator.as_color(
+                        game.full_name, LoggingColor.BRIGHT_MAGENTA
+                    ),
+                    LoggingDecorator.as_color(exc, LoggingColor.BRIGHT_RED),
+                )
                 continue
 
             if game_matches is None:
@@ -373,7 +430,7 @@ class ExcelParser:
 
         return results
 
-    def filter_matches(
+    def __filter_matches(
         self,
         matches: List[GameMatch],
     ) -> List[GameMatch]:
@@ -423,7 +480,7 @@ class ExcelParser:
 
         return matches
 
-    def get_match_option_selection(
+    def __get_match_option_selection(
         self,
         source: DataSource,
         game: ExcelGame,
@@ -456,7 +513,7 @@ class ExcelParser:
             val = input("Invalid selection, please select from the above list: ")
         return int(val) - 1
 
-    def get_match_from_multiple_matches(
+    def __get_match_from_multiple_matches(
         self,
         game: ExcelGame,
         matches: List[GameMatch],
@@ -478,7 +535,7 @@ class ExcelParser:
             The match selected or None if none of the above is selected.
         """
         if len(matches) > 1:
-            selection = self.get_match_option_selection(
+            selection = self.__get_match_option_selection(
                 source,
                 game,
                 matches,
@@ -494,7 +551,7 @@ class ExcelParser:
 
         return (False, None)
 
-    def confirm_non_full_match(
+    def __confirm_non_full_match(
         self,
         source: DataSource,
         game: ExcelGame,
@@ -518,6 +575,7 @@ class ExcelParser:
         games_override: Optional[pd.DataFrame] = None,
         offset: int = 0,
         batch_size: int = 500,
+        save_output: bool = False,
     ):
         """Matches all games against all sources.
 
@@ -527,7 +585,7 @@ class ExcelParser:
 
         Args:
             games_override: Overrides the games property for the class
-            batch_size: The number of games to process per source in one round before saving progress
+            batch_size: The number of games to process per source in one batch
 
         Returns:
             A dictionary mapping Excel game IDs to GameMatches
@@ -537,7 +595,9 @@ class ExcelParser:
 
         tasks: List[asyncio.Task[GameMatchResultSet]] = [
             asyncio.create_task(
-                self.get_matches_for_source(source, games_override, offset, batch_size),
+                self.__get_matches_for_source(
+                    source, games_override, offset, batch_size
+                ),
                 name=source.name,
             )
             for source in self.enabled_clients
@@ -569,9 +629,10 @@ class ExcelParser:
                     result_set = task.result()
 
                     batch_results: Dict[int, GameMatch] = {}
+                    game_results: Dict[int, ExcelGame] = {}
 
                     for gmr in result_set.successes:
-                        was_user_input, match = self.get_match_from_multiple_matches(
+                        was_user_input, match = self.__get_match_from_multiple_matches(
                             gmr.game, gmr.matches, source
                         )
 
@@ -580,30 +641,44 @@ class ExcelParser:
                                 was_user_input
                                 or match.validation_info.full_match
                                 or match.validation_info.exact
-                                or self.confirm_non_full_match(source, gmr.game, match)
+                                or self.__confirm_non_full_match(
+                                    source, gmr.game, match
+                                )
                             ):
                                 batch_results[gmr.game.id] = match
+                                game_results[gmr.game.id] = gmr.game
 
                     if source not in results:
                         results[source] = batch_results
                     else:
                         results[source].update(batch_results)
 
+                    min_rows = result_set.offset
+
+                    max_rows = min(
+                        result_set.offset + result_set.batch_size - 1, total_rows
+                    )
+
                     if any(batch_results):
-                        with open(
-                            f"output/{source.name.lower()}_matches-{result_set.offset}-{min(result_set.offset+result_set.batch_size-1,total_rows)}.json",
-                            "w",
-                            encoding="utf-8",
-                        ) as file:
-                            file.write(jsonpickle.encode(batch_results))
+                        self.__report_missing_playtime_and_scores(
+                            batch_results, game_results
+                        )
+                        if save_output:
+                            with open(
+                                f"output/{source.name.lower()}_matches-{min_rows}-{max_rows}.json",
+                                "w",
+                                encoding="utf-8",
+                            ) as file:
+                                file.write(jsonpickle.encode(batch_results))
 
                     if any(result_set.errors):
-                        with open(
-                            f"output/{source.name.lower()}_errors-{result_set.offset}-{min(result_set.offset+result_set.batch_size-1,total_rows)}.json",
-                            "w",
-                            encoding="utf-8",
-                        ) as file:
-                            file.write(jsonpickle.encode(result_set.errors))
+                        if save_output:
+                            with open(
+                                f"output/{source.name.lower()}_errors-{min_rows}-{max_rows}.json",
+                                "w",
+                                encoding="utf-8",
+                            ) as file:
+                                file.write(jsonpickle.encode(result_set.errors))
 
                     processed.append(task)
                     tasks.remove(task)
@@ -611,7 +686,7 @@ class ExcelParser:
                     if result_set.offset + result_set.batch_size < total_rows:
                         tasks.append(
                             asyncio.create_task(
-                                self.get_matches_for_source(
+                                self.__get_matches_for_source(
                                     source,
                                     games_override,
                                     result_set.offset + result_set.batch_size,
@@ -631,21 +706,118 @@ class ExcelParser:
 
         for game_id in missing_game_ids:
             row = games_df.loc[games_df["Id"] == game_id].iloc[0]
-            game = self.row_to_game(row)
+            game = self.__row_to_game(row)
             missing_games[game_id] = game
 
         if any(missing_games):
+            if save_output:
+                with open(
+                    f"output/missing_{datetime.utcnow().strftime('%Y-%m-%d')}.json",
+                    "w",
+                    encoding="utf-8",
+                ) as file:
+                    file.write(jsonpickle.encode(missing_games))
+
+    def __report_missing_playtime_and_scores(
+        self, results: Dict[int, GameMatch], game_results: Dict[int, ExcelGame]
+    ):
+        for game_id, _match in results.items():
+            if (
+                game_results[game_id].estimated_playtime is None
+                and game_results[game_id].release_date is not None
+                and not game_results[game_id].completed
+                and isinstance(_match.match_info, HowLongToBeatEntry)
+                and _match.match_info.main_story > 0
+            ):
+                print(
+                    f"Playtime missing for {game_results[game_id].full_name}. HLTB: {_match.match_info.main_story}"
+                )
+            if (
+                game_results[game_id].metacritic_rating is None
+                and game_results[game_id].release_date is not None
+                and isinstance(_match.match_info, dict)
+                and _match.match_info.get("critics") is not None
+            ):
+                print(
+                    f"Metacritic score missing for {game_results[game_id].full_name}. MC: {_match.match_info['critics']['score']}%"
+                )
+            if (
+                game_results[game_id].gamefaqs_rating is None
+                and game_results[game_id].release_date is not None
+                and isinstance(_match.match_info, clients.game_faqs.GameFaqsGame)
+                and _match.match_info.user_rating is not None
+                and _match.match_info.user_rating > 0
+                and (_match.match_info.user_rating_count or 0) > 1
+            ):
+                print(
+                    f"GameFAQs score missing for {game_results[game_id].full_name}. MC: {(_match.match_info.user_rating / 5) * 100:.2f}%"
+                )
+
+    def find_missing_ids_from_outputs(
+        self,
+        games_override: Optional[pd.DataFrame] = None,
+        output_file_name: str = "manual",
+        output_to_file: bool = True,
+        output_to_stdout: bool = False,
+        sources: Set[DataSource] = None,
+    ) -> Dict[int, ExcelGame]:
+        found_ids = set()
+        sources = sources or set(DataSource)
+
+        for root, _, files in os.walk("output/"):
+            for name in list(
+                filter(
+                    lambda f: "_matches-" in f
+                    and DataSource[f.split("-")[0].replace("_matches", "").upper()]
+                    in sources,
+                    files,
+                )
+            ):
+                with open(f"{os.path.join(root, name)}", "r", encoding="utf-8") as file:
+                    file_matches: Dict[int, GameMatch] = jsonpickle.decode(file.read())
+
+                    found_ids = found_ids.union(
+                        set(int(k) for k in file_matches.keys())
+                    )
+
+        games_df = self.games if games_override is None else games_override
+
+        missing_game_ids: Set[int] = set(
+            games_df["Id"].unique().astype(int).tolist()
+        ).difference(found_ids)
+
+        missing_games: Dict[int, ExcelGame] = {}
+
+        for game_id in sorted(missing_game_ids):
+            row = games_df.loc[games_df["Id"] == game_id].iloc[0]
+            game = self.__row_to_game(row)
+            missing_games[game_id] = game
+
+            if output_to_stdout:
+                print(
+                    f"Missing game ID {game_id}: {game.title} ({game.platform}) [{game.release_year or 'Early Access'}]"
+                )
+
+        if any(missing_games) and output_to_file:
+            timestamp = datetime.utcnow().strftime("%Y-%m-%d-%H-%M-%S")
             with open(
-                f"output/missing_{datetime.utcnow().strftime('%Y-%m-%d')}.json",
+                f"output/missing-{output_file_name}_{timestamp}.json",
                 "w",
                 encoding="utf-8",
             ) as file:
                 file.write(jsonpickle.encode(missing_games))
 
+        if output_to_stdout:
+            print(
+                f"Total Missing Games: {len(missing_games)} ({len(missing_games) / games_df.shape[0]*100:.2f}%)"
+            )
+
+        return missing_games
+
 
 if __name__ == "__main__":
     # Which parsers should run, empty list means all parsers
-    which_parsers: Optional[List[DataSource]] = []
+    which_parsers: Optional[List[DataSource]] = [DataSource.HLTB, DataSource.METACRITIC]
 
     # Which parsers should not run, empty list means no parsers will be excluded
     except_parsers: Optional[List[DataSource]] = []
@@ -654,25 +826,28 @@ if __name__ == "__main__":
         set(which_parsers or list(DataSource)).difference(set(except_parsers or []))
     )
 
-    # If specified, loads IDs from missing games instead of the entire sheet
-    missing_file: Optional[str] = None
-
-    # Filters the missing IDs, also if specified
-    missing_lambda: Callable[[Tuple[int, ExcelGame]], bool] = lambda _: True
+    # global_missing_games = parser.find_missing_ids_from_outputs(
+    #     output_to_file=False,
+    #     sources=set(
+    #         [
+    #             DataSource.IGDB,
+    #         ]
+    #     ),
+    # )
+    # global_missing_game_ids = list(global_missing_games.keys())
 
     # A DataFrame override to use instead of the entire Excel sheet, e.g. parser.games.sample(5)
     # for a random sample of 5 games. If None, then the entire sheet is used.
-    g_override: Optional[pd.DataFrame] = parser.games
+    g_override: Optional[pd.DataFrame] = parser.games[
+        (
+            (parser.games["Estimated Time"] == "")
+            | (parser.games["Metacritic Rating"] == "")
+        )
+        & (parser.games["Completed"] == 0)
+    ]
+
+    print(g_override.shape)
 
     missing_ids = []
 
-    if missing_file is not None:
-        with open(f"output/{missing_file}", "r", encoding="utf-8") as file:
-            missing: Dict[int, ExcelGame] = jsonpickle.decode(file.read())
-            missing_ids = list(
-                int(kvp[0]) for kvp in filter(missing_lambda, missing.items())
-            )
-
-        g_override = g_override.loc[parser.games["Id"].isin(missing_ids)]
-
-    asyncio.run(parser.match_games(g_override, offset=0, batch_size=3000))
+    asyncio.run(parser.match_games(g_override, offset=0, batch_size=1000))

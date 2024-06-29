@@ -87,7 +87,7 @@ class RomHackingClient(ClientBase):
     __BASE_ROM_HACKING_URL = "https://www.romhacking.net"
 
     __PLATFORM_ID_MAPPINGS = {
-        "3do": Platform._3DO,
+        "3do": Platform._3DO,  # pylint: disable=protected-access
         "arcade": Platform.ARCADE,
         "atari 2600": Platform.ATARI_2600,
         "atari 7800": Platform.ATARI_7800,

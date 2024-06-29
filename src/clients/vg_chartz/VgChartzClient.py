@@ -25,7 +25,7 @@ class VgChartzClient(ClientBase):
             spoof_headers=True,
         )
 
-    async def _make_request(self, route: str, params: Dict = {}) -> any:
+    async def _make_request(self, route: str, params: Dict = None) -> any:
         url = f"{self.__BASE_VG_CHARTZ_URL}/{route}"
 
         return await self.get(url, params=params, json=False)
@@ -125,6 +125,10 @@ class VgChartzClient(ClientBase):
                     if day_suffix == "th"
                     else datetime.datetime.strptime(release_text, "%dst %b %y")
                     if day_suffix == "st"
+                    else datetime.datetime.strptime(release_text, "%drd %b %y")
+                    if day_suffix == "rd"
+                    else datetime.datetime.strptime(release_text, "%dnd %b %y")
+                    if day_suffix == "nd"
                     else None
                 )
 

@@ -39,7 +39,7 @@ class GameyeClient(ClientBase):
         )
 
     async def _make_request(
-        self, route: str, params: Dict[str, Any] = dict()
+        self, route: str, params: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         return await self.get(f"{self.__BASE_GAMEYE_URL}/{route}", params=params)
 

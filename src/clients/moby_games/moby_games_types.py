@@ -89,7 +89,9 @@ class GamePlatform(NamedTuple):
     first_release_date: str
 
     def __str__(self) -> str:
-        return str(self.__dict__)
+        return str(
+            {"platform": self.platform, "first_release_date": self.first_release_date}
+        )
 
     def __repr__(self) -> str:
         return self.__str__()
