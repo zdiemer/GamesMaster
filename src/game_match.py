@@ -1,7 +1,7 @@
 """Classes for holding match info about game rows to external sources."""
 
 from enum import Enum
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from excel_game import ExcelGame
 from match_validator import ValidationInfo
@@ -22,6 +22,8 @@ class DataSource(Enum):
     VG_CHARTZ = 10
     GAMEYE = 11
     GAME_JOLT = 12
+    COOPTIMUS = 13
+    ARCADE_DATABASE = 14
 
     def __str__(self) -> str:
         return self.name
@@ -97,21 +99,71 @@ class GameMatchResult:
 
 
 class GameMatchResultSet:
-    successes: List[GameMatchResult]
-    errors: List[GameMatchResult]
-    skipped: List[GameMatchResult]
     offset: int
     batch_size: int
 
+    _successes: Dict[int, GameMatchResult]
+    _errors: Dict[int, GameMatchResult]
+    _skipped: Dict[int, GameMatchResult]
+    _index: int
+
     def __init__(self, offset: int, batch_size: int):
-        self.successes = []
-        self.errors = []
-        self.skipped = []
         self.offset = offset
         self.batch_size = batch_size
+        self._successes = {}
+        self._errors = {}
+        self._skipped = {}
+        self._index = 0
 
     def __str__(self) -> str:
         return str(self.__dict__)
 
     def __repr__(self) -> str:
         return self.__str__()
+
+    def __len__(self):
+        return len(self.successes) + len(self.errors)
+
+    @property
+    def successes(self) -> List[GameMatchResult]:
+        return list(self._successes.values())
+
+    @property
+    def errors(self) -> List[GameMatchResult]:
+        return list(self._errors.values())
+
+    @property
+    def skipped(self) -> List[GameMatchResult]:
+        return list(self._skipped.values())
+
+    def append(
+        self,
+        gmr: GameMatchResult,
+        match_type: Literal["success", "error", "skipped"] = "success",
+    ):
+        if match_type == "success":
+            self._successes[self._index] = gmr
+        if match_type == "error":
+            self._errors[self._index] = gmr
+        if match_type == "skipped":
+            self._skipped[self._index] = gmr
+
+        self._index += 1
+
+    def extend(
+        self,
+        gmrs: List[GameMatchResult],
+        match_type: Literal["success", "error", "skipped"] = "success",
+    ):
+        for gmr in gmrs:
+            self.append(gmr, match_type)
+
+    def __getitem__(self, key: int) -> GameMatchResult:
+        if key in self._successes:
+            return self._successes[key]
+        if key in self._errors:
+            return self._errors[key]
+        if key in self._skipped:
+            return self._skipped[key]
+
+        raise KeyError

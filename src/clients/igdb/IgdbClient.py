@@ -88,7 +88,7 @@ class IgdbClient(ClientBase):
     async def franchises(self, data: str):
         return await self._make_request("franchises/", data)
 
-    async def match_game(self, game: ExcelGame) -> List[GameMatch]:
+    async def get_results(self, game: ExcelGame) -> List[unicodedata.Any]:
         if not any(self.__platforms):
             await self._init_platforms()
 
@@ -97,109 +97,97 @@ class IgdbClient(ClientBase):
             "utf-8"
         )
 
-        results = await self.games(search_data)
-        matches: List[GameMatch] = []
+        return await self.games(search_data)
 
-        for res in results:
-            if any(m.is_guaranteed_match() for m in matches):
-                break
+    async def result_to_match(
+        self, game: ExcelGame, result: unicodedata.Any
+    ) -> GameMatch | None:
+        platforms = result.get("platforms") or []
 
-            platforms = res.get("platforms") or []
+        platforms_processed = [self.__platforms[p] for p in platforms]
 
-            platforms_processed = [self.__platforms[p] for p in platforms]
+        release_years = []
 
-            release_years = []
+        date_responses = [
+            await self.release_dates(f"fields date; where id = {rid};")
+            for rid in (result.get("release_dates") or [])
+        ]
 
-            date_responses = [
-                await self.release_dates(f"fields date; where id = {rid};")
-                for rid in (res.get("release_dates") or [])
-            ]
+        for date_response in date_responses:
+            if len(date_response) != 1 or date_response[0].get("date") is None:
+                continue
+            release_years.append(datetime.fromtimestamp(date_response[0]["date"]).year)
 
-            for date_response in date_responses:
-                if len(date_response) != 1 or date_response[0].get("date") is None:
-                    continue
-                release_years.append(
-                    datetime.fromtimestamp(date_response[0]["date"]).year
+        ic_responses = []
+
+        for cid in result.get("involved_companies") or []:
+            ic_responses.extend(
+                await self.involved_companies(
+                    f"fields company,developer,publisher; where id = {cid};"
                 )
-
-            ic_responses = []
-
-            for cid in res.get("involved_companies") or []:
-                ic_responses.extend(
-                    await self.involved_companies(
-                        f"fields company,developer,publisher; where id = {cid};"
-                    )
-                    or []
-                )
-
-            developers = []
-            publishers = []
-
-            for ic in ic_responses:
-                if ic.get("developer"):
-                    devs = await self.companies(
-                        f"fields name; where id = {ic['company']};"
-                    )
-
-                    for dev in devs:
-                        if dev.get("name"):
-                            developers.append(dev["name"])
-
-                if ic.get("publisher"):
-                    pubs = await self.companies(
-                        f"fields name; where id = {ic['company']};"
-                    )
-
-                    for pub in pubs:
-                        if pub.get("name"):
-                            publishers.append(pub["name"])
-
-            fran_responses = []
-
-            for fid in res.get("franchises") or []:
-                fran_responses.extend(
-                    await self.franchises(f"fields name; where id = {fid};") or []
-                )
-
-            franchises = []
-
-            for fran in fran_responses:
-                if fran.get("name"):
-                    franchises.append(fran["name"])
-
-            match = self.validator.validate(
-                game,
-                res.get("name"),
-                platforms_processed,
-                release_years,
-                publishers,
-                developers,
-                franchises,
+                or []
             )
 
-            if match.likely_match or (match.matched and not any(platforms_processed)):
-                matches.append(
-                    GameMatch(res["name"], res["url"], res["id"], res, match)
+        developers = []
+        publishers = []
+
+        for ic in ic_responses:
+            if ic.get("developer"):
+                devs = await self.companies(f"fields name; where id = {ic['company']};")
+
+                for dev in devs:
+                    if dev.get("name"):
+                        developers.append(dev["name"])
+
+            if ic.get("publisher"):
+                pubs = await self.companies(f"fields name; where id = {ic['company']};")
+
+                for pub in pubs:
+                    if pub.get("name"):
+                        publishers.append(pub["name"])
+
+        fran_responses = []
+
+        for fid in result.get("franchises") or []:
+            fran_responses.extend(
+                await self.franchises(f"fields name; where id = {fid};") or []
+            )
+
+        franchises = []
+
+        for fran in fran_responses:
+            if fran.get("name"):
+                franchises.append(fran["name"])
+
+        match = self.validator.validate(
+            game,
+            result.get("name"),
+            platforms_processed,
+            release_years,
+            publishers,
+            developers,
+            franchises,
+        )
+
+        if match.likely_match or (match.matched and not any(platforms_processed)):
+            return GameMatch(result["name"], result["url"], result["id"], result, match)
+
+        if result.get("alternative_names") is not None:
+            for alt in result["alternative_names"]:
+                names = await self.alternative_names(f"fields name; where id = {alt};")
+
+                if len(names) != 1:
+                    continue
+
+                match = self.validator.validate(
+                    game, names[0].get("name"), platforms_processed, release_years
                 )
-            elif res.get("alternative_names") is not None:
-                for alt in res["alternative_names"]:
-                    names = await self.alternative_names(
-                        f"fields name; where id = {alt};"
+
+                if match.likely_match or (
+                    match.matched and not any(platforms_processed)
+                ):
+                    return GameMatch(
+                        result["name"], result["url"], result["id"], result, match
                     )
 
-                    if len(names) != 1:
-                        continue
-
-                    match = self.validator.validate(
-                        game, names[0].get("name"), platforms_processed, release_years
-                    )
-
-                    if match.likely_match or (
-                        match.matched and not any(platforms_processed)
-                    ):
-                        matches.append(
-                            GameMatch(res["name"], res["url"], res["id"], res, match)
-                        )
-                        break
-
-        return matches
+        return None

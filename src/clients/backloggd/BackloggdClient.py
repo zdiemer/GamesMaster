@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, Iterator, List
+from typing import Any, Dict, Iterator
 
 from bs4 import BeautifulSoup
 
@@ -11,7 +11,7 @@ from match_validator import MatchValidator
 
 
 class BackloggdClient(ClientBase):
-    __BASE_BACKLOGGD_URL = "https://www.backloggd.com/"
+    __BASE_BACKLOGGD_URL = "https://www.backloggd.com"
 
     def __init__(self, validator: MatchValidator, config: Config = None):
         config = config or Config.create()

@@ -2,18 +2,18 @@ from __future__ import annotations
 
 import datetime
 import re
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, AsyncGenerator, Dict, List, Literal, Optional
 
 from clients import ClientBase, DatePart, RateLimit
 from config import Config
-from excel_game import ExcelGame, ExcelRegion
+from excel_game import ExcelGame, ExcelRegion, ExcelOwnedFormat
 from game_match import GameMatch
 from match_validator import MatchValidator
 
 
 class GameyeClient(ClientBase):
     __BASE_GAMEYE_URL = "https://www.gameye.app/api"
-    __EDITION_REGEX = r"( [\[\(](?P<edition>.*)[\]\)]$)"
+    __EDITION_REGEX = r"( [\[\(](?P<edition>[^\]]*)[\]\)])"
 
     __REGION_COUNTRY_MAPPINGS: Dict[ExcelRegion, List[int]] = {
         ExcelRegion.ASIA: [3, 9, 20, 22, 23],
@@ -58,6 +58,17 @@ class GameyeClient(ClientBase):
             },
         )
 
+    async def __deep_search_paginated(
+        self, title: str, offset: int = 0, limit: Literal[25, 50, 100] = 100
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        results = await self.deep_search(title, offset, limit)
+
+        yield results
+
+        while results["records"] is not None and len(results["records"]) == limit:
+            offset += limit
+            yield await self.deep_search(title, offset, limit)
+
     async def items(self, iid: int) -> Dict[str, Any]:
         return await self._make_request(f"items/{iid}")
 
@@ -74,24 +85,34 @@ class GameyeClient(ClientBase):
         return await self._make_request("genres")
 
     def should_skip(self, game: ExcelGame) -> bool:
-        return game.owned_format not in ("Both", "Physical")
+        return game.owned_format not in (
+            ExcelOwnedFormat.BOTH,
+            ExcelOwnedFormat.PHYSICAL,
+        )
 
     def __get_match_from_record(
         self, game: ExcelGame, record: Dict[str, Any]
     ) -> Optional[GameMatch]:
         title_without_edition = record["title"]
 
-        if any(game.notes) and "edition" in game.notes.lower():
-            re_matches = re.search(self.__EDITION_REGEX, record["title"])
+        if game.owned and any(game.owned_variant_types or []):
+            re_matches = re.findall(self.__EDITION_REGEX, record["title"])
+            variant_match = False
 
-            if re_matches is not None:
-                edition_match = re_matches.group("edition")
+            for match in re_matches:
+                edition_match: str = match[1]
 
                 edition_match = edition_match.lower().replace(" edition", "")
-                notes = game.notes.lower().replace(" edition", "")
 
-                if notes != edition_match:
-                    return None
+                if any(
+                    v.lower().replace(" edition", "") == edition_match
+                    for v in game.owned_variant_types
+                ):
+                    variant_match = True
+                    break
+
+            if not variant_match:
+                return None
 
         title_without_edition = re.sub(self.__EDITION_REGEX, "", title_without_edition)
 
@@ -112,24 +133,28 @@ class GameyeClient(ClientBase):
                 )
             ],
             year,
-            [
-                c["name"]
-                for c in filter(
-                    lambda _c: _c["id"] in record["pubs"],
-                    self.__companies["companies"],
-                )
-            ]
-            if record["pubs"] is not None
-            else None,
-            [
-                c["name"]
-                for c in filter(
-                    lambda _c: _c["id"] in record["devs"],
-                    self.__companies["companies"],
-                )
-            ]
-            if record["devs"] is not None
-            else None,
+            (
+                [
+                    c["name"]
+                    for c in filter(
+                        lambda _c: _c["id"] in record["pubs"],
+                        self.__companies["companies"],
+                    )
+                ]
+                if record["pubs"] is not None
+                else None
+            ),
+            (
+                [
+                    c["name"]
+                    for c in filter(
+                        lambda _c: _c["id"] in record["devs"],
+                        self.__companies["companies"],
+                    )
+                ]
+                if record["devs"] is not None
+                else None
+            ),
         )
 
         if match.likely_match:
@@ -214,16 +239,10 @@ class GameyeClient(ClientBase):
         offset = 0
         limit = 100
 
-        results = await self.deep_search(game.title, offset, limit)
-        matches.extend(self.__process_results(game, results))
-
-        while (
-            results["records"] is not None
-            and len(results["records"]) == limit
-            and not any(m.is_guaranteed_match() for m in matches)
-        ):
-            offset += limit
-            results = await self.deep_search(game.title, offset, limit)
+        async for results in self.__deep_search_paginated(game.title, offset, limit):
             matches.extend(self.__process_results(game, results))
+
+            if any(m.is_guaranteed_match() for m in matches):
+                break
 
         return matches

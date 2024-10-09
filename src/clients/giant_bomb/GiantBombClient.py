@@ -20,8 +20,8 @@ class GiantBombClient(ClientBase):
             validator,
             config,
             RateLimit(
-                60,
-                DatePart.MINUTE,
+                200,
+                DatePart.HOUR,
                 rate_limit_per_route=True,
                 get_route_path=lambda s: urllib.parse.urlparse(s).path.split("/")[2],
             ),
@@ -59,6 +59,9 @@ class GiantBombClient(ClientBase):
     async def concept(self, guid: str) -> Any:
         return await self._make_request(f"concept/{guid}")
 
+    async def location(self, guid: str) -> Any:
+        return await self._make_request(f"location/{guid}")
+
     async def releases(self, game_id: int) -> Any:
         return await self._make_request(
             "releases", params={"filter": f"game:{game_id}"}
@@ -91,95 +94,90 @@ class GiantBombClient(ClientBase):
 
         return years
 
-    async def match_game(self, game: ExcelGame) -> List[GameMatch]:
-        results = await self.search(game.title)
-        matches: List[GameMatch] = []
+    async def get_results(self, game: ExcelGame) -> List[Any]:
+        response = await self.search(game.title)
+        return response["results"]
 
-        for res in results["results"]:
-            if any(m.is_guaranteed_match() for m in matches):
-                break
+    async def result_to_match(self, game: ExcelGame, result: Any) -> GameMatch | None:
+        if result.get("platforms") is None:
+            return None
 
-            if res.get("platforms") is None:
-                continue
+        platforms = [p["name"] for p in result["platforms"]]
+        years = []
 
-            platforms = [p["name"] for p in res["platforms"]]
-            years = []
+        if (
+            result.get("original_release_date") is None
+            and result.get("expected_release_year") is not None
+        ):
+            years.append(result["expected_release_year"])
 
-            if (
-                res.get("original_release_date") is None
-                and res.get("expected_release_year") is not None
-            ):
-                years.append(res["expected_release_year"])
+        if result.get("original_release_date") is not None:
+            years.append(
+                datetime.strptime(result["original_release_date"], "%Y-%m-%d").year
+            )
 
-            if res.get("original_release_date") is not None:
-                years.append(
-                    datetime.strptime(res["original_release_date"], "%Y-%m-%d").year
+        match = self.validator.validate(game, result["name"], platforms, years)
+
+        if match.likely_match:
+            if not match.date_matched:
+                match.date_matched = self.validator.verify_release_year(
+                    game.release_year,
+                    await self.get_release_years(result["id"], game.platform.value),
                 )
 
-            match = self.validator.validate(game, res["name"], platforms, years)
+            game_info = await self.game(result["guid"])
+            developers = []
+            publishers = []
+            franchises = []
 
-            if match.likely_match:
-                if not match.date_matched:
-                    match.date_matched = self.validator.verify_release_year(
-                        game.release_year,
-                        await self.get_release_years(res["id"], game.platform),
+            if game_info.get("results"):
+                if any(game_info["results"].get("developers") or []):
+                    developers.extend(
+                        d["name"] for d in game_info["results"]["developers"]
+                    )
+                if any(game_info["results"].get("publishers") or []):
+                    publishers.extend(
+                        p["name"] for p in game_info["results"]["publishers"]
+                    )
+                if any(game_info["results"].get("franchises") or []):
+                    franchises.extend(
+                        f["name"] for f in game_info["results"]["franchises"]
                     )
 
-                game_info = await self.game(res["guid"])
-                developers = []
-                publishers = []
-                franchises = []
+            match.developer_matched = self.validator.verify_component(
+                game.developer, developers
+            )
 
-                if game_info.get("results"):
-                    if any(game_info["results"].get("developers") or []):
-                        developers.extend(
-                            d["name"] for d in game_info["results"]["developers"]
-                        )
-                    if any(game_info["results"].get("publishers") or []):
-                        publishers.extend(
-                            p["name"] for p in game_info["results"]["publishers"]
-                        )
-                    if any(game_info["results"].get("franchises") or []):
-                        franchises.extend(
-                            f["name"] for f in game_info["results"]["franchises"]
-                        )
+            match.publisher_matched = self.validator.verify_component(
+                game.publisher, publishers
+            )
 
-                match.developer_matched = self.validator.verify_component(
-                    game.developer, developers
-                )
+            match.franchise_matched = self.validator.verify_franchise(
+                game.franchise, franchises
+            )
 
-                match.publisher_matched = self.validator.verify_component(
-                    game.publisher, publishers
-                )
+            return GameMatch(
+                result["name"], result["site_detail_url"], result["guid"], result, match
+            )
+        elif result.get("aliases") is not None:
+            for alias in result["aliases"].split("\n"):
+                match = self.validator.validate(game, alias, platforms, years)
 
-                match.franchise_matched = self.validator.verify_franchise(
-                    game.franchise, franchises
-                )
-
-                matches.append(
-                    GameMatch(
-                        res["name"], res["site_detail_url"], res["guid"], res, match
-                    ),
-                )
-            elif res.get("aliases") is not None:
-                for alias in res["aliases"].split("\n"):
-                    match = self.validator.validate(game, alias, platforms, years)
-
-                    if match.likely_match:
-                        if not match.date_matched:
-                            match.date_matched = self.validator.verify_release_year(
-                                game.release_year,
-                                await self.get_release_years(res["id"], game.platform),
-                            )
-
-                        matches.append(
-                            GameMatch(
-                                res["name"],
-                                res["site_detail_url"],
-                                res["guid"],
-                                res,
-                                match,
+                if match.likely_match:
+                    if not match.date_matched:
+                        match.date_matched = self.validator.verify_release_year(
+                            game.release_year,
+                            await self.get_release_years(
+                                result["id"], game.platform.value
                             ),
                         )
-                        break
-        return matches
+
+                    return GameMatch(
+                        result["name"],
+                        result["site_detail_url"],
+                        result["guid"],
+                        result,
+                        match,
+                    )
+
+        return None

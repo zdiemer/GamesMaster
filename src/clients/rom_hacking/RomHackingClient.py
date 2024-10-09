@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Literal
+from typing import Any, Dict, List, Literal
 
 from bs4 import BeautifulSoup
 
@@ -176,12 +176,12 @@ class RomHackingClient(ClientBase):
     def should_skip(self, game: ExcelGame) -> bool:
         return (
             game.release_region in (ExcelRegion.NORTH_AMERICA, ExcelRegion.EUROPE)
-            or not game.platform.lower() in self.__PLATFORM_ID_MAPPINGS
+            or not game.platform.value.lower() in self.__PLATFORM_ID_MAPPINGS
         )
 
     async def match_game(self, game: ExcelGame) -> List[GameMatch]:
         text = await self.translations(
-            game.title, self.__PLATFORM_ID_MAPPINGS[game.platform.lower()]
+            game.title, self.__PLATFORM_ID_MAPPINGS[game.platform.value.lower()]
         )
 
         soup = BeautifulSoup(text, "html.parser")
@@ -221,7 +221,7 @@ class RomHackingClient(ClientBase):
                 "translation_release": translation_release,
             }
 
-            match = self.validator.validate(game, name, [game.platform])
+            match = self.validator.validate(game, name, [game.platform.value])
 
             if match.likely_match:
                 matches.append(

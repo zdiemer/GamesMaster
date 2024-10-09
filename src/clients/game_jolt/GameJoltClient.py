@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 
 from clients import ClientBase, DatePart, RateLimit
 from config import Config
-from excel_game import ExcelGame
+from excel_game import ExcelGame, ExcelPlatform
 from game_match import GameMatch
 from match_validator import MatchValidator
 
@@ -26,7 +26,7 @@ class GameJoltClient(ClientBase):
         )
 
     def should_skip(self, game: ExcelGame) -> bool:
-        return game.platform != "PC" or game.notes in (
+        return game.platform != ExcelPlatform.PC or game.notes in (
             "Steam",
             "Epic Games Store",
             "GOG",
@@ -36,36 +36,28 @@ class GameJoltClient(ClientBase):
             "Battle.net",
         )
 
-    async def match_game(self, game: ExcelGame) -> List[GameMatch]:
-        matches: List[GameMatch] = []
-
+    async def get_results(self, game: ExcelGame) -> List[Any]:
         results = await self.search(game.title)
+        return (results.get("payload") or {}).get("games") or []
 
-        games = (results.get("payload") or {}).get("games") or []
+    async def result_to_match(self, game: ExcelGame, result: Any) -> GameMatch | None:
+        developer = (result.get("developer") or {}).get("display_name") or None
 
-        for g in games:
-            if any(m.is_guaranteed_match() for m in matches):
-                break
+        match = self.validator.validate(
+            game,
+            result["title"],
+            [game.platform.value],
+            [datetime.datetime.fromtimestamp(int(result["posted_on"]) / 1000.0)],
+            [developer] if developer else None,
+        )
 
-            developer = (g.get("developer") or {}).get("display_name") or None
-
-            match = self.validator.validate(
-                game,
-                g["title"],
-                [game.platform],
-                [datetime.datetime.fromtimestamp(int(g["posted_on"]) / 1000.0)],
-                [developer] if developer else None,
+        if match.likely_match:
+            return GameMatch(
+                result["title"],
+                f"https://gamejolt.com/games/{result['slug']}/{result['id']}",
+                result["id"],
+                result,
+                match,
             )
 
-            if match.likely_match:
-                matches.append(
-                    GameMatch(
-                        g["title"],
-                        f"https://gamejolt.com/games/{g['slug']}/{g['id']}",
-                        g["id"],
-                        g,
-                        match,
-                    )
-                )
-
-        return matches
+        return None

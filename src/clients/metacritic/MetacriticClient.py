@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import urllib.parse
-from typing import Dict, List, Optional
+from typing import AsyncGenerator, Dict, List, Optional
 
 from clients import ClientBase, DatePart, RateLimit
 from config import Config
@@ -79,6 +79,21 @@ class MetacriticClient(ClientBase):
             },
         )
 
+    def __get_results_from_component(
+        self, res: dict, component_name: str = "search"
+    ) -> Optional[dict]:
+        components: List[Dict] = res.get("components")
+
+        res_comp: Optional[dict] = next(
+            (c for c in components if c["meta"]["componentName"] == component_name),
+            None,
+        )
+
+        if res_comp is None or res_comp.get("data") is None:
+            return None
+
+        return res_comp
+
     async def critic_reviews(self, game_slug: str, platform_slug: str) -> dict:
         return await self.get(
             f"{self.__BASE_FANDOM_METACRITIC_URL}/games-critic-reviews/{game_slug}/platform/{platform_slug}/web",
@@ -103,7 +118,7 @@ class MetacriticClient(ClientBase):
         return (
             game.release_region
             not in set([ExcelRegion.NORTH_AMERICA, ExcelRegion.EUROPE])
-            or game.platform.lower() not in self.__VALID_REVIEW_PLATFORMS
+            or game.platform.value.lower() not in self.__VALID_REVIEW_PLATFORMS
         )
 
     async def match_game(self, game: ExcelGame) -> List[GameMatch]:
@@ -134,7 +149,7 @@ class MetacriticClient(ClientBase):
                     (
                         p["name"]
                         for p in search_item["platforms"]
-                        if validator.verify_platform(game.platform, [p["name"]])
+                        if validator.verify_platform(game.platform.value, [p["name"]])
                     ),
                     None,
                 )
@@ -175,7 +190,7 @@ class MetacriticClient(ClientBase):
                         resp, "user-score-summary"
                     )
 
-                    u_score = (user_reviews.get("data") or {}).get("item")
+                    u_score = ((user_reviews or {}).get("data") or {}).get("item")
 
                     if u_score is not None:
                         u_score["url"] = f"{self.__BASE_METACRITIC_URL}{u_score['url']}"

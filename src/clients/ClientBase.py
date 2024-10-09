@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import pickle
 import random
 import traceback
 import urllib.parse
@@ -13,6 +12,7 @@ from typing import Any, Callable, Coroutine, Dict, List, Optional, Tuple, Union
 import aiohttp
 import aiohttp.client_exceptions
 from fake_headers import Headers
+from piapy import PiaVpn
 
 from config import Config
 from excel_game import ExcelGame
@@ -186,6 +186,8 @@ class ClientBase:
     __immediately_stop_statuses: List[int]
     __next_headers: datetime
     __spoof_headers: bool
+    __use_vpn: bool
+    __cycle_vpn_stasues: List[int]
 
     _config: Config
     _rate_limiter: RateLimiter
@@ -201,6 +203,8 @@ class ClientBase:
         limit: RateLimit = RateLimit(),
         spoof_headers: bool = False,
         immediately_stop_statuses: List[int] = None,
+        use_vpn: bool = False,
+        cycle_vpn_stasues: List[int] = None,
     ):
         self.validator = validator
         self._config = config or Config.create()
@@ -211,6 +215,15 @@ class ClientBase:
         self.__cached_headers = None
         self.__cached_responses = {}
         self.__immediately_stop_statuses = immediately_stop_statuses or []
+        self.__use_vpn = use_vpn
+        self.__cycle_vpn_stasues = cycle_vpn_stasues or []
+
+    def __del__(self):
+        if self.__use_vpn:
+            vpn = PiaVpn()
+
+            if vpn.status() == "Connected":
+                vpn.disconnect()
 
     def _get_headers(self, url: str) -> dict:
         if self.__cached_headers is None or datetime.utcnow() > self.__next_headers:
@@ -255,6 +268,46 @@ class ClientBase:
             + (str(data) if data is not None else "")
         )
 
+    async def _connect_vpn(self):
+        if not self.__use_vpn:
+            return
+
+        vpn = PiaVpn()
+
+        status = vpn.status()
+
+        while status in (
+            "Connecting",
+            "Disconnecting",
+            "Reconnecting",
+            "StillConnecting",
+            "DisconnectingToReconnect",
+            "StillReconnecting",
+        ):
+            status = vpn.status()
+            await asyncio.sleep(1)
+
+        if status != "Connected":
+            vpn.set_region(server="random")
+            region = vpn.connect()
+            logging.debug("VPN connected to %s", region)
+
+    async def _cycle_vpn(self):
+        if not self.__use_vpn:
+            return
+
+        logging.info("VPN has been compromised, cycling IP.")
+        vpn = PiaVpn()
+
+        if vpn.status() == "Connected":
+            if vpn.disconnect():
+                logging.debug("VPN disconnected.")
+            else:
+                logging.error("VPN failed to disconnect.")
+
+        self.__cached_headers = None
+        await self._connect_vpn()
+
     async def request(
         self,
         method: str,
@@ -263,7 +316,10 @@ class ClientBase:
         headers: Optional[Dict[str, str]] = None,
         data: Any = None,
         json: bool = True,
+        retry_errors: Optional[List[Exception]] = None,
     ) -> Union[Any, str]:
+        await self._connect_vpn()
+
         req_hash = self._hash_request(url, params, data)
 
         if req_hash in self.__cached_responses:
@@ -288,15 +344,23 @@ class ClientBase:
                         if res.status != 200:
                             if res.status in self.__immediately_stop_statuses:
                                 raise ImmediatelyStopStatusError
+                            if res.status in self.__cycle_vpn_stasues:
+                                await self._cycle_vpn()
                             await backoff.backoff(res.url, res.status)
                             return await do_req()
                         res_val = await res.json() if json else await res.text()
                         self.__cached_responses[req_hash] = res_val
                         return res_val
-            except (aiohttp.client_exceptions.ClientError, asyncio.TimeoutError) as exc:
-                print(exc)
-                await backoff.backoff(url, type(exc).__name__)
-                return await do_req()
+            except Exception as exc:
+                if (
+                    type(exc)
+                    in (aiohttp.client_exceptions.ClientError, asyncio.TimeoutError)
+                    or retry_errors is not None
+                    and type(exc) in retry_errors
+                ):
+                    print(exc)
+                    await backoff.backoff(url, type(exc).__name__)
+                    return await do_req()
 
         return await self._rate_limiter.request(url, do_req)
 
@@ -306,8 +370,16 @@ class ClientBase:
         params: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
         json: bool = True,
+        retry_errors: Optional[List[Exception]] = None,
     ) -> Union[Any, str]:
-        return await self.request("GET", url, params=params, headers=headers, json=json)
+        return await self.request(
+            "GET",
+            url,
+            params=params,
+            headers=headers,
+            json=json,
+            retry_errors=retry_errors,
+        )
 
     async def post(
         self,
@@ -316,18 +388,43 @@ class ClientBase:
         headers: Optional[Dict[str, str]] = None,
         data: Any = None,
         json: bool = True,
+        retry_errors: Optional[List[Exception]] = None,
     ) -> Union[Any, str]:
         return await self.request(
-            "POST", url, params=params, headers=headers, data=data, json=json
+            "POST",
+            url,
+            params=params,
+            headers=headers,
+            data=data,
+            json=json,
+            retry_errors=retry_errors,
         )
 
-    async def match_game_with_cache(self, game: ExcelGame) -> List[GameMatch]:
-        pass
-
-    async def match_game(self, _: ExcelGame) -> List[GameMatch]:
+    async def get_results(self, game: ExcelGame) -> List[Any]:
         raise NotImplementedError
 
-    def should_skip(self, _: ExcelGame) -> bool:
+    async def result_to_match(
+        self, game: ExcelGame, result: Any
+    ) -> Optional[GameMatch]:
+        raise NotImplementedError
+
+    async def match_game(self, game: ExcelGame) -> List[GameMatch]:
+        results = await self.get_results(game)
+
+        matches: List[GameMatch] = []
+
+        for result in results:
+            if any(m.is_guaranteed_match() for m in matches):
+                break
+
+            match = await self.result_to_match(game, result)
+
+            if match is not None:
+                matches.append(match)
+
+        return matches
+
+    def should_skip(self, game: ExcelGame) -> bool:
         return False
 
     async def try_match_game(

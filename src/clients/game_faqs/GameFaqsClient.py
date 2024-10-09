@@ -7,7 +7,7 @@ matches as structured output.
 
 import re
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from bs4 import BeautifulSoup, element
 
@@ -150,12 +150,10 @@ class GameFaqsClient(ClientBase):
         super().__init__(
             validator,
             config,
-            RateLimit(
-                per=DatePart.HOUR,
-                range_req=(20, 60),
-            ),
+            RateLimit(per=DatePart.HOUR, range_req=(240, 600)),
             spoof_headers=True,
-            immediately_stop_statuses=[401, 403, 429],
+            use_vpn=True,
+            cycle_vpn_stasues=[401, 403, 429],
         )
 
     async def _make_request(
@@ -436,59 +434,55 @@ class GameFaqsClient(ClientBase):
 
         return gf_game
 
-    async def match_game(self, game: ExcelGame) -> List[GameMatch]:
-        results = await self.home_game_search(game.title)
-        matches: List[GameMatch] = []
+    async def get_results(self, game: ExcelGame) -> List[Any]:
+        return await self.home_game_search(game.title)
 
-        for res in results:
-            if any(m.is_guaranteed_match() for m in matches):
-                break
+    async def result_to_match(
+        self, game: ExcelGame, result: Any
+    ) -> Optional[GameMatch]:
+        if result.get("footer"):
+            return None
 
-            if res.get("footer"):
-                continue
-            if res.get("game_name") and res.get("plats"):
-                match = self.validator.validate(
-                    game,
-                    res["game_name"],
-                    res["plats"].split(", "),
-                    [datetime.strptime(res["date_released"], "%Y-%m-%d").year],
+        if result.get("game_name") is None or result.get("plats") is None:
+            return None
+
+        match = self.validator.validate(
+            game,
+            result["game_name"],
+            result["plats"].split(", "),
+            [datetime.strptime(result["date_released"], "%Y-%m-%d").year],
+        )
+
+        if match.likely_match:
+            gf_game = await self.__get_gamefaqs_game(result, game.platform.value)
+
+            if not match.date_matched:
+                match.date_matched = self.validator.verify_release_year(
+                    game.release_year,
+                    [
+                        rel.release_year
+                        for rel in filter(
+                            # Filter unreleased games
+                            lambda _rel: _rel.status == GameFaqsReleaseStatus.RELEASED,
+                            gf_game.releases,
+                        )
+                    ],
                 )
 
-                if match.likely_match:
-                    gf_game = await self.__get_gamefaqs_game(res, game.platform)
+            match.publisher_matched = self.validator.verify_component(
+                game.publisher,
+                [r.publisher.name for r in (gf_game.releases or [])],
+            )
 
-                    if not match.date_matched:
-                        match.date_matched = self.validator.verify_release_year(
-                            game.release_year,
-                            [
-                                rel.release_year
-                                for rel in filter(
-                                    # Filter unreleased games
-                                    lambda _rel: _rel.status
-                                    == GameFaqsReleaseStatus.RELEASED,
-                                    gf_game.releases,
-                                )
-                            ],
-                        )
+            match.developer_matched = self.validator.verify_component(
+                game.developer,
+                [gf_game.developer] if gf_game.developer is not None else None,
+            )
 
-                    match.publisher_matched = self.validator.verify_component(
-                        game.publisher,
-                        [r.publisher.name for r in (gf_game.releases or [])],
-                    )
+            match.franchise_matched = self.validator.verify_component(
+                game.franchise, [f.name for f in (gf_game.franchises or [])]
+            )
 
-                    match.developer_matched = self.validator.verify_component(
-                        game.developer,
-                        [gf_game.developer] if gf_game.developer is not None else None,
-                    )
+            return GameMatch(gf_game.title, gf_game.url, gf_game.id, gf_game, match)
 
-                    match.franchise_matched = self.validator.verify_component(
-                        game.franchise, [f.name for f in (gf_game.franchises or [])]
-                    )
-
-                    matches.append(
-                        GameMatch(
-                            gf_game.title, gf_game.url, gf_game.id, gf_game, match
-                        )
-                    )
-
-        return matches
+        return None

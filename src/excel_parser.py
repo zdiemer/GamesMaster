@@ -14,164 +14,49 @@ import asyncio
 import logging
 import math
 import os
+import pickle
 import sys
 import traceback
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple, Type, Set
+from typing import Dict, List, Literal, Optional, Tuple, Type, Set
 
 import jsonpickle
 import pandas as pd
-from howlongtobeatpy import HowLongToBeat, HowLongToBeatEntry
-from steam import Steam
 
 import clients
 import clients.game_faqs
 from config import Config
 from game_match import DataSource, GameMatch, GameMatchResult, GameMatchResultSet
-from excel_game import (
-    ExcelGame,
-    ExcelRegion as Region,
-    Playability,
-    PlayingStatus,
-    TranslationStatus,
-)
+from excel_game import ExcelGame
+from excel_loader import ExcelLoader
 from logging_decorator import LoggingColor, LoggingDecorator
 from match_validator import MatchValidator
 
 
-class SteamWrapper(clients.ClientBase):
-    """Wrapper class for third-party Steam client.
+class BatchLogger:
+    source: DataSource
+    batch_number: int
+    total_batches: int
+    batch_size: int
 
-    SteamWrapper implements the clients.ClientBase match_game function
-    and wraps a third-party Steam client library for fetching information
-    about games from Steam.
+    def __init__(
+        self, source: DataSource, batch_number: int, total_batches: int, batch_size: int
+    ):
+        self.source = source
+        self.batch_number = batch_number
+        self.total_batches = total_batches
+        self.batch_size = batch_size
 
-    Attributes:
-        _client: A Steam object which represents the underlying Steam client
-    """
-
-    _client: Steam
-
-    def __init__(self, validator: MatchValidator, config: Config = None):
-        config = config or Config.create()
-        super().__init__(
-            validator, config, clients.RateLimit(5, clients.DatePart.SECOND)
+    def log(self, level: int, formatted_message: str):
+        logging.log(
+            level,
+            "%s: Batch %s of %s (%s games/batch) - %s",
+            LoggingDecorator.as_color(self.source, LoggingColor.BRIGHT_CYAN),
+            LoggingDecorator.as_color(self.batch_number, LoggingColor.BRIGHT_BLUE),
+            LoggingDecorator.as_color(self.total_batches, LoggingColor.BRIGHT_BLUE),
+            LoggingDecorator.as_color(self.batch_size, LoggingColor.BRIGHT_BLUE),
+            formatted_message,
         )
-        self._client = Steam(config.steam_web_api_key)
-
-    def should_skip(self, game: ExcelGame) -> bool:
-        return game.platform != "PC"
-
-    async def match_game(self, game: ExcelGame) -> List[GameMatch]:
-        async def do_search() -> Dict[str, list]:
-            res = self._client.apps.search_games(game.title)
-            await asyncio.sleep(0)
-            return res
-
-        max_retries = 3
-        retries = 0
-        should_retry = True
-        results: Optional[List[Any]] = []
-
-        while should_retry and retries < max_retries:
-            try:
-                results = await self._rate_limiter.request("steam", do_search)
-                should_retry = False
-            except Exception:  # pylint: disable=broad-except
-                retries += 1
-                should_retry = True
-
-        if results is None or retries == max_retries:
-            return []
-
-        matches: List[GameMatch] = []
-
-        for res in results["apps"]:
-            match = self.validator.validate(game, res["name"])
-            match.platform_matched = True
-            match.date_matched = True
-            if match.matched:
-                matches.append(
-                    GameMatch(res["name"], res["link"], res["id"], res, match)
-                )
-
-        return matches
-
-
-class HLTBWrapper(clients.ClientBase):
-    """Wrapper class for third-party How Long to Beat client.
-
-    HLTBWrapper implements the clients.ClientBase match_game function
-    and wraps a third-party How Long to Beat client library for fetching
-    information about games from How Long to Beat.
-    """
-
-    def __init__(self, validator: MatchValidator, config: Config = None):
-        config = config or Config.create()
-        super().__init__(
-            validator, config, clients.RateLimit(5, clients.DatePart.SECOND)
-        )
-
-    async def match_game(self, game: ExcelGame) -> List[GameMatch]:
-        async def do_search() -> Optional[List[HowLongToBeatEntry]]:
-            res = await HowLongToBeat().async_search(game.title)
-            return res
-
-        max_retries = 3
-        retries = 0
-        should_retry = True
-        results: Optional[List[HowLongToBeatEntry]] = []
-
-        while should_retry and retries < max_retries:
-            try:
-                results = await self._rate_limiter.request("hltb", do_search)
-                should_retry = False
-            except Exception:  # pylint: disable=broad-except
-                retries += 1
-                should_retry = True
-
-        if results is None or retries == max_retries:
-            return []
-
-        matches: List[GameMatch] = []
-
-        for res in results:
-            match = self.validator.validate(
-                game,
-                res.game_name,
-                res.profile_platforms,
-                [res.release_world],
-                developers=[res.profile_dev],
-            )
-
-            if match.likely_match:
-                matches.append(
-                    GameMatch(
-                        res.game_name,
-                        res.game_web_link,
-                        res.game_id,
-                        res,
-                        match,
-                    )
-                )
-                continue
-
-            match = self.validator.validate(
-                game, res.game_alias, res.profile_platforms, [res.release_world]
-            )
-
-            if match.likely_match:
-                matches.append(
-                    GameMatch(
-                        res.game_name,
-                        res.game_web_link,
-                        res.game_id,
-                        res,
-                        match,
-                    )
-                )
-
-        return matches
 
 
 class ExcelParser:
@@ -196,100 +81,128 @@ class ExcelParser:
         DataSource.METACRITIC: clients.MetacriticClient,
         DataSource.MOBY_GAMES: clients.MobyGamesClient,
         DataSource.ROM_HACKING: clients.RomHackingClient,
-        DataSource.STEAM: SteamWrapper,
-        DataSource.HLTB: HLTBWrapper,
+        DataSource.STEAM: clients.SteamWrapper,
+        DataSource.HLTB: clients.HltbClient,
         DataSource.PRICE_CHARTING: clients.PriceChartingClient,
         DataSource.VG_CHARTZ: clients.VgChartzClient,
         DataSource.GAMEYE: clients.GameyeClient,
         DataSource.GAME_JOLT: clients.GameJoltClient,
+        DataSource.COOPTIMUS: clients.CooptimusClient,
+        DataSource.ARCADE_DATABASE: clients.ArcadeDatabaseClient,
     }
 
     config: Config
-    games: pd.DataFrame
     enabled_clients: Set[DataSource]
 
     __running_clients: Dict[DataSource, clients.ClientBase] = {}
     __validator: MatchValidator
+    __loader: ExcelLoader
+    __df_cache: pd.DataFrame = None
+
+    __processed_matches_by_source_and_type: Dict[
+        DataSource,
+        Dict[
+            Literal["matches", "errors", "skipped"],
+            Dict[str, GameMatchResult | GameMatch],
+        ],
+    ]
 
     def __init__(self, enabled_clients: Set[DataSource] = None):
         self.config = Config.create()
-        self.games = self.__parse_excel()
-        self.games["Id"] = self.games.index + 1
+        self.__loader = ExcelLoader()
         self.enabled_clients = enabled_clients or set(self._ALL_CLIENTS.keys())
         self.__validator = MatchValidator()
         logging.basicConfig(
             stream=sys.stdout,
-            level=logging.WARN,
+            level=logging.DEBUG,
             format="%(levelname)s %(asctime)s - %(message)s",
             datefmt="%y-%m-%d %I:%M:%S %p",
         )
 
-    def __parse_excel(self, sheet: str = "Games") -> pd.DataFrame:
-        """Internal method for parsing Excel to a pandas.DataFrame"""
-        return pd.read_excel(
-            "static/games.xlsx", sheet_name=sheet, keep_default_na=False
-        )
+        self.__processed_matches_by_source_and_type = {}
 
-    def __row_to_game(self, row: pd.Series) -> ExcelGame:
-        """Converts a Pandas row into an ExcelGame object.
+        for client in enabled_clients:
+            self.__processed_matches_by_source_and_type[client] = {}
 
-        Given a row from the base spreadsheet, converts into a Python object.
+            self.__processed_matches_by_source_and_type[client]["matches"] = (
+                ExcelParser.get_all_processed_hash_ids(client)
+            )
 
-        Args:
-            row: A Pandas series representing a row in the spreadsheet
+            self.__processed_matches_by_source_and_type[client]["matches"].update(
+                ExcelParser.get_all_processed_hash_ids(client, "no-matches")
+            )
 
-        Returns:
-            An ExcelGame object representation of the given row
-        """
-        return ExcelGame(
-            row["Id"],
-            row["Title"],
-            row["Platform"],
-            row["Release Date"] if row["Release Date"] != "Early Access" else None,
-            Region(row["Release Region"]),
-            row["Publisher"],
-            row["Developer"],
-            row["Franchise"],
-            row["Genre"],
-            row["Notes"],
-            row["Format"],
-            row["Estimated Time"],
-            row["Completed"],
-            row["Priority"],
-            row["Metacritic Rating"],
-            row["GameFAQs User Rating"],
-            row["DLC"],
-            row["Owned"],
-            (
-                TranslationStatus(row["English"])
-                if row["English"] is not None and str(row["English"]).strip() != ""
-                else None
-            ),
-            row["VR"],
-            (
-                PlayingStatus(row["Playing Status"])
-                if row["Playing Status"] is not None
-                and str(row["Playing Status"]).strip() != ""
-                else None
-            ),
-            (
-                row["Date Purchased"]
-                if str(row["Date Purchased"]).strip() != ""
-                else None
-            ),
-            row["Purchase Price"],
-            row["Rating"],
-            Playability(row["Playable"]),
-            row["Completion Time"],
-        )
+            self.__processed_matches_by_source_and_type[client]["skipped"] = (
+                ExcelParser.get_all_processed_hash_ids(client, "skipped")
+            )
+
+            self.__processed_matches_by_source_and_type[client]["errors"] = (
+                ExcelParser.get_all_processed_hash_ids(client, "errors")
+            )
+
+    @property
+    def games(self) -> pd.DataFrame:
+        if self.__df_cache is None:
+            self.__df_cache = self.__loader.df
+            self.__df_cache["Id"] = self.__df_cache.index + 1
+        return self.__df_cache
+
+    @staticmethod
+    def get_all_processed_hash_ids(
+        source: DataSource,
+        output_type: Literal["matches", "errors", "skipped", "no-matches"] = "matches",
+    ) -> Dict[str, GameMatchResult | GameMatch]:
+        results: Dict[str, GameMatchResult | GameMatch] = {}
+        source_name = source.name.lower()
+        source_folder = f"output/{source_name}"
+
+        if not os.path.exists(source_folder):
+            return results
+
+        for root, _, files in os.walk(source_folder):
+            for file in files:
+                if file.startswith(f"{output_type}-"):
+                    with open(os.path.join(root, file), "r", encoding="utf-8") as f:
+                        cache_results: List[GameMatchResult] | Dict[str, GameMatch] = (
+                            jsonpickle.loads(f.read())
+                        )
+
+                        if output_type == "matches":
+                            results.update(cache_results)
+                        else:
+                            results.update({e.game.hash_id: e for e in cache_results})
+
+        return results
+
+    def __get_resumable_cache_file_name(
+        self, source: DataSource, min_rows: int, max_rows: int
+    ) -> str:
+        if not os.path.isdir("output/resumable"):
+            os.mkdir("output/resumable")
+
+        return f"output/resumable/{source.name.lower()}-{min_rows}-{max_rows}-resumable.pkl"
+
+    def __get_output_file_name(
+        self,
+        source: DataSource,
+        min_rows: int,
+        max_rows: int,
+        output_type: Literal["matches", "errors", "skipped", "no-matches"] = "matches",
+    ):
+        source_name = source.name.lower()
+        source_folder = f"output/{source_name}"
+
+        if not os.path.isdir(source_folder):
+            os.mkdir(source_folder)
+
+        return f"{source_folder}/{output_type}-{min_rows}-{max_rows}.json"
 
     async def __get_matches_for_source(
         self,
         source: DataSource,
-        games_override: Optional[pd.DataFrame] = None,
         offset: int = 0,
         batch_size: int = 500,
-    ) -> GameMatchResultSet:
+    ) -> Optional[GameMatchResultSet]:
         """Fetches matches for the games property for a given source.
 
         This method will loop through all the rows of the games object and
@@ -304,6 +217,7 @@ class ExcelParser:
         Returns:
             A dictionary mapping of game ID (from the pandas.DataFrame) to a list of GameMatches
         """
+        original_offset = offset
         results = GameMatchResultSet(offset, batch_size)
         if source not in self.enabled_clients:
             return results
@@ -314,8 +228,7 @@ class ExcelParser:
 
         self.__running_clients[source] = client
 
-        games = games_override if games_override is not None else self.games
-        total_rows, _ = games.shape
+        total_rows = len(self.__loader.games)
 
         if offset > total_rows:
             raise IndexError("Offset is out of bounds of the DataFrame")
@@ -328,96 +241,254 @@ class ExcelParser:
         batch_no = int((offset / batch_size) + 1)
         total_batches = math.ceil(float(total_rows) / batch_size)
 
-        logging.info(
-            "%s: Beginning batch %s of %s (%s games/batch) - %s/%s games processed (%s%%)",
-            LoggingDecorator.as_color(source, LoggingColor.BRIGHT_CYAN),
-            LoggingDecorator.as_color(batch_no, LoggingColor.BRIGHT_BLUE),
-            LoggingDecorator.as_color(total_batches, LoggingColor.BRIGHT_BLUE),
-            LoggingDecorator.as_color(batch_size, LoggingColor.BRIGHT_BLUE),
-            LoggingDecorator.as_color(offset, LoggingColor.BRIGHT_BLUE),
-            LoggingDecorator.as_color(
-                total_rows,
-                LoggingColor.BRIGHT_BLUE,
-            ),
-            LoggingDecorator.as_color(
-                f"{(float(offset) / total_rows)*100:.2f}",
-                LoggingColor.BRIGHT_BLUE,
-            ),
+        end_row = min(offset + batch_size - 1, total_rows)
+        batch_stop = offset + batch_size
+
+        logger = BatchLogger(source, batch_no, total_batches, batch_size)
+
+        if os.path.exists(self.__get_output_file_name(source, offset, end_row)):
+            all_matches: Set[Optional[str]] = set()
+
+            for output_type in self.__processed_matches_by_source_and_type[source]:
+                all_matches = all_matches.union(
+                    set(
+                        k
+                        for k in self.__processed_matches_by_source_and_type[source][
+                            output_type
+                        ].keys()
+                    )
+                )
+
+            sheet_game_hashes = set(
+                g.hash_id for g in self.__loader.games[offset:batch_stop]
+            )
+
+            diff = sheet_game_hashes.difference(all_matches)
+
+            if not any(diff):
+                logger.log(logging.INFO, "Batch already exists.")
+                return results
+
+            diff_missing_str = LoggingDecorator.as_color(
+                len(diff), LoggingColor.BRIGHT_BLUE
+            )
+            logger.log(
+                logging.INFO,
+                f"Batch has existing output, but {diff_missing_str} games are missing.",
+            )
+
+        resumable_cache_file_name = self.__get_resumable_cache_file_name(
+            source, offset, end_row
         )
 
-        for i, row in games.iloc[offset : offset + batch_size].iterrows():
-            game = self.__row_to_game(row)
+        if os.path.exists(resumable_cache_file_name):
+            can_resume = False
+            with open(resumable_cache_file_name, "rb") as resf:
+                try:
+                    cache_results: GameMatchResultSet = pickle.load(resf)
 
-            try:
-                success, game_matches, exc = await client.try_match_game(game)
-            except (
-                clients.ImmediatelyStopStatusError,
-                clients.ResponseNotOkError,
-            ) as exc:
-                results.errors.extend(
-                    [
-                        GameMatchResult(self.__row_to_game(r[1]), error=exc)
-                        for r in games.iloc[i:].iterrows()
-                    ]
+                    cache_result_hashes = (
+                        set(g.game.hash_id for g in cache_results.successes)
+                        .union(set(g.game.hash_id for g in cache_results.errors))
+                        .union(set(g.game.hash_id for g in cache_results.skipped))
+                    )
+
+                    new_processed_count = len(cache_results) + len(
+                        cache_results.skipped
+                    )
+                    new_offset = original_offset + new_processed_count
+
+                    resumable_offset_hashes = set(
+                        g.hash_id
+                        for g in self.__loader.games[original_offset:new_offset]
+                    )
+
+                    diff = cache_result_hashes.difference(resumable_offset_hashes)
+
+                    can_resume = not any(diff)
+                except EOFError as exc:
+                    can_resume = False
+                    exc_str = LoggingDecorator.as_color(exc, LoggingColor.BRIGHT_RED)
+                    logger.log(
+                        logging.WARNING,
+                        f"Batch is not able to be resumed due to an exception: {exc_str}",
+                    )
+
+                if can_resume:
+                    results = cache_results
+                    processed_count = new_processed_count
+                    offset = new_offset
+                else:
+                    cache_hashes_str = LoggingDecorator.as_color(
+                        len(cache_result_hashes), LoggingColor.BRIGHT_BLUE
+                    )
+
+                    resumable_hashes_str = LoggingDecorator.as_color(
+                        len(resumable_offset_hashes), LoggingColor.BRIGHT_BLUE
+                    )
+
+                    diff_str = LoggingDecorator.as_color(
+                        len(diff), LoggingColor.BRIGHT_BLUE
+                    )
+
+                    logger.log(
+                        logging.WARNING,
+                        "Batch is not able to be resumed due to mismatched hash counts: "
+                        f"Resumable - {cache_hashes_str}, In-Batch - {resumable_hashes_str}, Diff - {diff_str}.",
+                    )
+
+            if can_resume:
+                offset_str = LoggingDecorator.as_color(offset, LoggingColor.BRIGHT_BLUE)
+                logger.log(
+                    logging.INFO,
+                    f"Batch is able to be resumed, starting at offset {offset_str}.",
                 )
-                break
 
-            processed_count += 1
+            os.remove(resumable_cache_file_name)
 
-            if success and game_matches is not None:
-                gmr = GameMatchResult(game, self.__filter_matches(game_matches))
-                results.successes.append(gmr)
+        offset_str = LoggingDecorator.as_color(offset, LoggingColor.BRIGHT_BLUE)
 
-            if not success:
-                results.errors.append(GameMatchResult(game, error=exc))
-                logging.error(
-                    ("%s (batch %s/%s): Error processing %s - %s"),
-                    LoggingDecorator.as_color(source, LoggingColor.BRIGHT_CYAN),
-                    LoggingDecorator.as_color(batch_no, LoggingColor.BRIGHT_CYAN),
-                    LoggingDecorator.as_color(total_batches, LoggingColor.BRIGHT_CYAN),
-                    LoggingDecorator.as_color(
+        total_str = LoggingDecorator.as_color(
+            total_rows,
+            LoggingColor.BRIGHT_BLUE,
+        )
+
+        progress_str = LoggingDecorator.as_color(
+            f"{(float(offset) / total_rows)*100:.2f}",
+            LoggingColor.BRIGHT_BLUE,
+        )
+
+        logger.log(
+            logging.INFO,
+            f"Beginning batch. {offset_str}/{total_str} games processed ({progress_str}%)",
+        )
+
+        try:
+            for i, game in enumerate(self.__loader.games[offset:batch_stop]):
+                if source in self.__processed_matches_by_source_and_type:
+                    existing_gmr: Optional[GameMatchResult] = None
+                    existing_gmr_type: Optional[
+                        Literal["matches", "errors", "skipped"]
+                    ] = None
+
+                    if (
+                        game.hash_id
+                        in self.__processed_matches_by_source_and_type[source][
+                            "skipped"
+                        ]
+                    ):
+                        existing_gmr = self.__processed_matches_by_source_and_type[
+                            source
+                        ]["skipped"][game.hash_id]
+                        if isinstance(existing_gmr, GameMatch):
+                            existing_gmr = GameMatchResult(game, [existing_gmr])
+                        existing_gmr_type = "skipped"
+                    if (
+                        game.hash_id
+                        in self.__processed_matches_by_source_and_type[source][
+                            "matches"
+                        ]
+                    ):
+                        existing_gmr = self.__processed_matches_by_source_and_type[
+                            source
+                        ]["matches"][game.hash_id]
+                        if isinstance(existing_gmr, GameMatch):
+                            existing_gmr = GameMatchResult(game, [existing_gmr])
+                        existing_gmr_type = "matches"
+
+                if existing_gmr is not None:
+                    if last_log <= datetime.utcnow() - timedelta(seconds=5):
+                        game_str = LoggingDecorator.as_color(
+                            game.full_name, LoggingColor.BRIGHT_MAGENTA
+                        )
+
+                        logger.log(
+                            logging.INFO, f"Found {game_str} in existing results."
+                        )
+
+                        last_log = datetime.utcnow()
+                    results.append(existing_gmr, existing_gmr_type)
+                    processed_count += 1
+                    continue
+
+                try:
+                    success, game_matches, exc = await client.try_match_game(game)
+                except (
+                    clients.ImmediatelyStopStatusError,
+                    clients.ResponseNotOkError,
+                ) as exc:
+                    results.extend(
+                        [
+                            GameMatchResult(g, error=exc)
+                            for g in self.__loader.games[i:]
+                        ],
+                        "error",
+                    )
+                    break
+
+                processed_count += 1
+
+                if success and game_matches is not None:
+                    gmr = GameMatchResult(game, self.__filter_matches(game_matches))
+                    results.append(gmr, "success")
+
+                if not success:
+                    results.append(GameMatchResult(game, error=exc), "error")
+                    game_str = LoggingDecorator.as_color(
                         game.full_name, LoggingColor.BRIGHT_MAGENTA
-                    ),
-                    LoggingDecorator.as_color(exc, LoggingColor.BRIGHT_RED),
+                    )
+                    exc_str = LoggingDecorator.as_color(exc, LoggingColor.BRIGHT_RED)
+                    logger.log(
+                        logging.ERROR, f"Error processing {game_str} - {exc_str}"
+                    )
+                    continue
+
+                if game_matches is None:
+                    # Game was skipped due to should_skip, no need to log process
+                    results.append(GameMatchResult(game), "skipped")
+                    continue
+
+                match_string = (
+                    f"{len(game_matches)} potential match"
+                    f"{'es' if len(game_matches) != 1 else ''}"
                 )
-                continue
 
-            if game_matches is None:
-                # Game was skipped due to should_skip, no need to log process
-                results.skipped.append(GameMatchResult(game))
-                continue
+                row_time = datetime.utcnow()
+                elapsed = row_time - start
+                estimated_s = (batch_rows - processed_count) * (
+                    elapsed.total_seconds() / processed_count
+                )
+                estimated = timedelta(seconds=estimated_s)
 
-            match_string = (
-                f"{len(game_matches)} potential match"
-                f"{'es' if len(game_matches) != 1 else ''}"
-            )
-
-            row_time = datetime.utcnow()
-            elapsed = row_time - start
-            estimated_s = (batch_rows - processed_count) * (
-                elapsed.total_seconds() / processed_count
-            )
-            estimated = timedelta(seconds=estimated_s)
-
-            if last_log <= datetime.utcnow() - timedelta(seconds=5):
-                logging.info(
-                    (
-                        "%s (batch %s/%s): Processed %s - %s - %s/%s (%s%%), "
-                        "Elapsed: %s, Estimated Time Remaining: %s"
-                    ),
-                    LoggingDecorator.as_color(source, LoggingColor.BRIGHT_CYAN),
-                    LoggingDecorator.as_color(batch_no, LoggingColor.BRIGHT_CYAN),
-                    LoggingDecorator.as_color(total_batches, LoggingColor.BRIGHT_CYAN),
-                    LoggingDecorator.as_color(
+                if last_log <= datetime.utcnow() - timedelta(seconds=5):
+                    game_str = LoggingDecorator.as_color(
                         game.full_name, LoggingColor.BRIGHT_MAGENTA
-                    ),
-                    match_string,
-                    processed_count,
-                    min(batch_rows, total_rows - offset),
-                    f"{(processed_count/batch_rows)*100:,.2f}",
-                    LoggingDecorator.as_color(str(elapsed), LoggingColor.BRIGHT_GREEN),
-                    LoggingDecorator.as_color(str(estimated), LoggingColor.BRIGHT_RED),
-                )
+                    )
+
+                    elapsed_str = LoggingDecorator.as_color(
+                        str(elapsed), LoggingColor.BRIGHT_GREEN
+                    )
+
+                    estimated_str = LoggingDecorator.as_color(
+                        str(estimated), LoggingColor.BRIGHT_RED
+                    )
+
+                    logger.log(
+                        logging.INFO,
+                        f"Processed {game_str} - {match_string} - {processed_count}/"
+                        f"{min(batch_rows, total_rows - offset)} "
+                        f"({(processed_count/batch_rows)*100:,.2f}%), Elapsed: "
+                        f"{elapsed_str}, Estimated Time Remaining: {estimated_str}",
+                    )
+
+                    last_log = datetime.utcnow()
+        except asyncio.CancelledError:
+            with open(
+                self.__get_resumable_cache_file_name(source, original_offset, end_row),
+                "wb",
+            ) as resf:
+                pickle.dump(results, resf, pickle.HIGHEST_PROTOCOL)
+            raise
 
         logging.info(
             "%s: Finished processing all rows for batch %s, Batch Elapsed: %s",
@@ -590,20 +661,20 @@ class ExcelParser:
         Returns:
             A dictionary mapping Excel game IDs to GameMatches
         """
-        games_df = self.games if games_override is None else games_override
-        total_rows, _ = games_df.shape
+        if games_override is not None:
+            self.__loader.override_sheet(games_override)
+
+        total_rows = len(self.__loader.games)
 
         tasks: List[asyncio.Task[GameMatchResultSet]] = [
             asyncio.create_task(
-                self.__get_matches_for_source(
-                    source, games_override, offset, batch_size
-                ),
+                self.__get_matches_for_source(source, offset, batch_size),
                 name=source.name,
             )
             for source in self.enabled_clients
         ]
 
-        results: Dict[DataSource, Dict[int, GameMatch]] = {}
+        results: Dict[DataSource, Dict[str, GameMatch]] = {}
         processed: List[asyncio.Task[GameMatchResultSet]] = []
 
         while any(tasks):
@@ -628,8 +699,9 @@ class ExcelParser:
 
                     result_set = task.result()
 
-                    batch_results: Dict[int, GameMatch] = {}
-                    game_results: Dict[int, ExcelGame] = {}
+                    batch_results: Dict[str, GameMatch] = {}
+                    game_results: Dict[str, ExcelGame] = {}
+                    no_matches: List[GameMatchResult] = []
 
                     for gmr in result_set.successes:
                         was_user_input, match = self.__get_match_from_multiple_matches(
@@ -645,8 +717,12 @@ class ExcelParser:
                                     source, gmr.game, match
                                 )
                             ):
-                                batch_results[gmr.game.id] = match
-                                game_results[gmr.game.id] = gmr.game
+                                batch_results[gmr.game.hash_id] = match
+                                game_results[gmr.game.hash_id] = gmr.game
+                            else:
+                                no_matches.append(gmr)
+                        else:
+                            no_matches.append(gmr)
 
                     if source not in results:
                         results[source] = batch_results
@@ -660,12 +736,13 @@ class ExcelParser:
                     )
 
                     if any(batch_results):
-                        self.__report_missing_playtime_and_scores(
-                            batch_results, game_results
-                        )
+                        if source in (DataSource.HLTB, DataSource.METACRITIC):
+                            self.__report_missing_playtime_and_scores(
+                                batch_results, game_results
+                            )
                         if save_output:
                             with open(
-                                f"output/{source.name.lower()}_matches-{min_rows}-{max_rows}.json",
+                                self.__get_output_file_name(source, min_rows, max_rows),
                                 "w",
                                 encoding="utf-8",
                             ) as file:
@@ -674,11 +751,35 @@ class ExcelParser:
                     if any(result_set.errors):
                         if save_output:
                             with open(
-                                f"output/{source.name.lower()}_errors-{min_rows}-{max_rows}.json",
+                                self.__get_output_file_name(
+                                    source, min_rows, max_rows, "errors"
+                                ),
                                 "w",
                                 encoding="utf-8",
                             ) as file:
                                 file.write(jsonpickle.encode(result_set.errors))
+
+                    if any(result_set.skipped):
+                        if save_output:
+                            with open(
+                                self.__get_output_file_name(
+                                    source, min_rows, max_rows, "skipped"
+                                ),
+                                "w",
+                                encoding="utf-8",
+                            ) as file:
+                                file.write(jsonpickle.encode(result_set.skipped))
+
+                    if any(no_matches):
+                        if save_output:
+                            with open(
+                                self.__get_output_file_name(
+                                    source, min_rows, max_rows, "no-matches"
+                                ),
+                                "w",
+                                encoding="utf-8",
+                            ) as file:
+                                file.write(jsonpickle.encode(no_matches))
 
                     processed.append(task)
                     tasks.remove(task)
@@ -688,7 +789,6 @@ class ExcelParser:
                             asyncio.create_task(
                                 self.__get_matches_for_source(
                                     source,
-                                    games_override,
                                     result_set.offset + result_set.batch_size,
                                     result_set.batch_size,
                                 ),
@@ -698,40 +798,54 @@ class ExcelParser:
                     else:
                         del self.__running_clients[source]
 
-        missing_game_ids = set(games_df["Id"].unique().astype(int).tolist()).difference(
-            {g for k in results.values() for g in k.keys()}
-        )
-
-        missing_games: Dict[int, ExcelGame] = {}
-
-        for game_id in missing_game_ids:
-            row = games_df.loc[games_df["Id"] == game_id].iloc[0]
-            game = self.__row_to_game(row)
-            missing_games[game_id] = game
-
-        if any(missing_games):
-            if save_output:
-                with open(
-                    f"output/missing_{datetime.utcnow().strftime('%Y-%m-%d')}.json",
-                    "w",
-                    encoding="utf-8",
-                ) as file:
-                    file.write(jsonpickle.encode(missing_games))
-
     def __report_missing_playtime_and_scores(
-        self, results: Dict[int, GameMatch], game_results: Dict[int, ExcelGame]
+        self, results: Dict[str, GameMatch], game_results: Dict[str, ExcelGame]
     ):
         for game_id, _match in results.items():
             if (
-                game_results[game_id].estimated_playtime is None
-                and game_results[game_id].release_date is not None
+                game_results[game_id].release_date is not None
                 and not game_results[game_id].completed
-                and isinstance(_match.match_info, HowLongToBeatEntry)
-                and _match.match_info.main_story > 0
+                and isinstance(_match.match_info, clients.HltbResult)
+                and _match.match_info.playtime_main_seconds > 0
             ):
-                print(
-                    f"Playtime missing for {game_results[game_id].full_name}. HLTB: {_match.match_info.main_story}"
+                playtime_min = _match.match_info.playtime_main_seconds // 60
+
+                if playtime_min > 60:
+                    rem = playtime_min % 60
+                    playtime_min -= rem
+                    playtime_min += 30 * round(rem / 30)
+
+                playtime_str = LoggingDecorator.as_color(
+                    (
+                        f"{playtime_min} min"
+                        if playtime_min < 60
+                        else f"{playtime_min / 60:.1f} hr"
+                    ),
+                    LoggingColor.GREEN,
                 )
+
+                game = game_results[game_id]
+
+                get_difference = lambda x: abs(game.estimated_playtime - (x / 60)) / (
+                    (game.estimated_playtime + (x / 60)) / 2
+                )
+
+                if (
+                    game.estimated_playtime is None
+                    or get_difference(playtime_min) > 0.15
+                ):
+                    estimated_str = LoggingDecorator.as_color(
+                        (
+                            f"{int((game.estimated_playtime or 0) * 60)} min"
+                            if (game.estimated_playtime or 0) < 1
+                            else f"{game.estimated_playtime:.1f} hr"
+                        ),
+                        LoggingColor.RED,
+                    )
+
+                    print(
+                        f"Playtime mismatch for {game.full_name}. Sheet: {estimated_str}, HLTB: {playtime_str}"
+                    )
             if (
                 game_results[game_id].metacritic_rating is None
                 and game_results[game_id].release_date is not None
@@ -753,101 +867,31 @@ class ExcelParser:
                     f"GameFAQs score missing for {game_results[game_id].full_name}. MC: {(_match.match_info.user_rating / 5) * 100:.2f}%"
                 )
 
-    def find_missing_ids_from_outputs(
-        self,
-        games_override: Optional[pd.DataFrame] = None,
-        output_file_name: str = "manual",
-        output_to_file: bool = True,
-        output_to_stdout: bool = False,
-        sources: Set[DataSource] = None,
-    ) -> Dict[int, ExcelGame]:
-        found_ids = set()
-        sources = sources or set(DataSource)
-
-        for root, _, files in os.walk("output/"):
-            for name in list(
-                filter(
-                    lambda f: "_matches-" in f
-                    and DataSource[f.split("-")[0].replace("_matches", "").upper()]
-                    in sources,
-                    files,
-                )
-            ):
-                with open(f"{os.path.join(root, name)}", "r", encoding="utf-8") as file:
-                    file_matches: Dict[int, GameMatch] = jsonpickle.decode(file.read())
-
-                    found_ids = found_ids.union(
-                        set(int(k) for k in file_matches.keys())
-                    )
-
-        games_df = self.games if games_override is None else games_override
-
-        missing_game_ids: Set[int] = set(
-            games_df["Id"].unique().astype(int).tolist()
-        ).difference(found_ids)
-
-        missing_games: Dict[int, ExcelGame] = {}
-
-        for game_id in sorted(missing_game_ids):
-            row = games_df.loc[games_df["Id"] == game_id].iloc[0]
-            game = self.__row_to_game(row)
-            missing_games[game_id] = game
-
-            if output_to_stdout:
-                print(
-                    f"Missing game ID {game_id}: {game.title} ({game.platform}) [{game.release_year or 'Early Access'}]"
-                )
-
-        if any(missing_games) and output_to_file:
-            timestamp = datetime.utcnow().strftime("%Y-%m-%d-%H-%M-%S")
-            with open(
-                f"output/missing-{output_file_name}_{timestamp}.json",
-                "w",
-                encoding="utf-8",
-            ) as file:
-                file.write(jsonpickle.encode(missing_games))
-
-        if output_to_stdout:
-            print(
-                f"Total Missing Games: {len(missing_games)} ({len(missing_games) / games_df.shape[0]*100:.2f}%)"
-            )
-
-        return missing_games
-
 
 if __name__ == "__main__":
     # Which parsers should run, empty list means all parsers
-    which_parsers: Optional[List[DataSource]] = [DataSource.HLTB, DataSource.METACRITIC]
+    which_parsers: Optional[List[DataSource]] = []
 
     # Which parsers should not run, empty list means no parsers will be excluded
-    except_parsers: Optional[List[DataSource]] = []
+    except_parsers: Optional[List[DataSource]] = [
+        DataSource.GAME_FAQS,  # IP Bans easily, has to run on its own with VPN
+        DataSource.STEAM,  # Currently broken
+        DataSource.PRICE_CHARTING,  # Unsubscribed from premium API
+        DataSource.ROM_HACKING,  # Site taken down
+    ]
 
     parser = ExcelParser(
         set(which_parsers or list(DataSource)).difference(set(except_parsers or []))
     )
 
-    # global_missing_games = parser.find_missing_ids_from_outputs(
-    #     output_to_file=False,
-    #     sources=set(
-    #         [
-    #             DataSource.IGDB,
-    #         ]
-    #     ),
-    # )
-    # global_missing_game_ids = list(global_missing_games.keys())
-
     # A DataFrame override to use instead of the entire Excel sheet, e.g. parser.games.sample(5)
     # for a random sample of 5 games. If None, then the entire sheet is used.
-    g_override: Optional[pd.DataFrame] = parser.games[
-        (
-            (parser.games["Estimated Time"] == "")
-            | (parser.games["Metacritic Rating"] == "")
-        )
-        & (parser.games["Completed"] == 0)
-    ]
-
-    print(g_override.shape)
+    g_override: Optional[pd.DataFrame] = None
 
     missing_ids = []
 
-    asyncio.run(parser.match_games(g_override, offset=0, batch_size=1000))
+    asyncio.run(
+        parser.match_games(
+            games_override=g_override, offset=0, batch_size=1000, save_output=True
+        )
+    )

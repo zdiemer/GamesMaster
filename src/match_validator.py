@@ -207,7 +207,7 @@ class MatchValidator:
             .replace("Ū", "U")
         )
 
-    def roman_numeralize(self, string: str) -> str:
+    def roman_numeralize(self, string: str, _max: int = 20) -> str:
         """Converts Roman numeral parts to real numbers.
 
         This method takes in a string and converts any of its whitespace
@@ -222,11 +222,15 @@ class MatchValidator:
 
         def try_roman_numeralize(_str: str) -> str:
             try:
-                return str(roman.fromRoman(_str.upper()))
+                _filter_str = "".join(filter(str.isalnum, _str))
+                _num = roman.fromRoman(_filter_str.upper())
+                if _num > _max:
+                    return _str
+                return str(_num)
             except roman.InvalidRomanNumeralError:
                 return _str
 
-        return " ".join([try_roman_numeralize(_str) for _str in string.split(" ")])
+        return " ".join([try_roman_numeralize(_str) for _str in string.split()])
 
     def normalize(self, string: str) -> str:
         """Normalizes a string with many normalization methods.
@@ -252,7 +256,7 @@ class MatchValidator:
                 unicodedata.normalize(
                     "NFKD",
                     re.sub(
-                        r"( \([0-9]{4}\))",
+                        r"( \([A-Za-z0-9]{4}\))",
                         "",
                         html.unescape(
                             self.roman_numeralize(
@@ -303,7 +307,7 @@ class MatchValidator:
         platform_equal = (
             platforms is not None
             and any(platforms)
-            and self.verify_platform(game.platform, platforms)
+            and self.verify_platform(game.platform.value, platforms)
         )
 
         year_equal = (
