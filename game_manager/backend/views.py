@@ -3,14 +3,10 @@
 import io
 import os
 
-from django.http import HttpResponse, JsonResponse
-from django.core import serializers
-from django.contrib.auth.models import User, Group
-from rest_framework import viewsets, permissions, status, generics
-from django.contrib.postgres.aggregates import ArrayAgg
+from django.http import HttpResponse
+from rest_framework import viewsets, generics
 from minio import Minio
 from PIL import Image
-from django.db.models import Q
 
 from .serializers import (
     PurchaseSerializer,
@@ -22,7 +18,6 @@ from .serializers import (
     GameDetailSerializer,
     ReleaseSerializer,
     FranchiseSerializer,
-    ReviewSerializer,
 )
 from .models import (
     Game,
@@ -34,7 +29,6 @@ from .models import (
     Company,
     Mode,
     Franchise,
-    Review,
 )
 
 minioClient = Minio(
@@ -65,7 +59,7 @@ def serveImage(request, image_id):
     newimg = im.resize((int(s[0] * ratio), int(s[1] * ratio)), Image.Resampling.LANCZOS)
 
     if data == None:
-        return HttpResponse(f"failed to fetch")
+        return HttpResponse("failed to fetch")
     else:
         img_byte_arr = io.BytesIO()
         newimg.save(img_byte_arr, format="PNG")
@@ -129,7 +123,7 @@ def index(request):
         game = purchase.release.game
         res += f"<div><h2>{game.title}</h2>"
         res += f"<div>purchased for: ${purchase.purchase_price} on {purchase.purchase_date} in {purchase.get_purchase_format_display()}</div>"
-        res += f""
+        res += ""
 
         res += "</div>"
 

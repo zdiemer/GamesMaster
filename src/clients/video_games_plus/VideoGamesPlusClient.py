@@ -1,13 +1,9 @@
-import asyncio
-from typing import Dict, List, Optional, AsyncGenerator, Any, Tuple
+from typing import Dict, List, AsyncGenerator, Any
 
 from bs4 import BeautifulSoup, ResultSet
 
-from excel_game import ExcelGame, ExcelPlatform
-from excel_loader import ExcelLoader
+from excel_game import ExcelPlatform
 from clients import ShoppingClientBase, BaseResult
-from config import Config
-from match_validator import MatchValidator
 
 
 class VideoGamesPlusClient(ShoppingClientBase):

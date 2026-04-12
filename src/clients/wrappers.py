@@ -1,14 +1,11 @@
 import asyncio
 import datetime
-import logging
-import logging.config
 import re
 from enum import Enum
 from typing import Any, List, Optional
 
 import wikipedia
 from bs4 import BeautifulSoup
-from selenium import webdriver
 from steam import webapi
 
 import clients

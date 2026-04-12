@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import urllib.parse
-from typing import AsyncGenerator, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from clients import ClientBase, DatePart, RateLimit
 from config import Config

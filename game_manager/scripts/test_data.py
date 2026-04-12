@@ -1,4 +1,3 @@
-from PIL import Image
 import uuid
 from minio import Minio
 import os

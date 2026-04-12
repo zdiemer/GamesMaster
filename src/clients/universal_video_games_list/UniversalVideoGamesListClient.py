@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import re
-import unidecode
 from datetime import datetime
-from typing import Any, AsyncGenerator, Dict, List
+from typing import Any, List
 
 from bs4 import BeautifulSoup
 

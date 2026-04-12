@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import datetime
-import json
 import re
 from typing import Any, AsyncGenerator, List
 
 from bs4 import BeautifulSoup
 
-from clients import ClientBase, DatePart, RateLimit, ResponseNotOkError
+from clients import ClientBase, DatePart, RateLimit
 from config import Config
 from excel_game import ExcelGame, ExcelPlatform
 from game_match import GameMatch

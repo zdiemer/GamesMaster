@@ -1,4 +1,3 @@
-from django.contrib.auth.models import User, Group
 from rest_framework import serializers
 
 from .models import (
@@ -10,7 +9,6 @@ from .models import (
     Platform,
     Purchase,
     NotableDeveloper,
-    Franchise,
     Review,
 )
 
