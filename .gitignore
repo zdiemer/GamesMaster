@@ -3,6 +3,7 @@
 # Static files
 static/config.json
 output/*
+geckodriver.log
 
 # pyenv
 .python-version
@@ -18,3 +19,8 @@ game_manager/data/*
 game_manager/db.*
 
 .vscode/*
+
+**/*.egg-info
+
+build/
+backup/

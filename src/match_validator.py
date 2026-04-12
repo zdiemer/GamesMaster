@@ -6,14 +6,14 @@ release years.
 """
 
 import html
-import unicodedata
 import re
 from typing import Dict, List, Optional
+from unidecode import unidecode
 
 import edit_distance
 import roman
 
-from excel_game import ExcelGame
+from excel_game import ExcelGame, ExcelPlatform
 from constants import PLATFORM_NAMES
 
 
@@ -117,7 +117,8 @@ class MatchValidator:
     """
 
     __cached_normalization: Dict[str, str]
-    __THE_REGEX = r"The "
+    __ARTICLES_REGEX = r"(^The )|(, The$)|(^A )|(, A$)|(^An )|(, An$)"
+    __POSSESSIVE_REGEX = r"(^[^':]+'s )"
 
     def __init__(self):
         self.__cached_normalization = {}
@@ -153,21 +154,50 @@ class MatchValidator:
         """
         t_1 = str(t_1)
         t_2 = str(t_2)
-        t1_fuzzy = re.sub(self.__THE_REGEX, "", t_1.split(":", maxsplit=1)[0])
-        t2_fuzzy = re.sub(self.__THE_REGEX, "", t_2.split(":", maxsplit=1)[0])
+
+        if (not t_1 or not t_2) and t_1 != t_2:
+            return False
+
+        def titles_equal_fuzzy_separator(separator: str) -> bool:
+            t1_left = re.sub(
+                self.__ARTICLES_REGEX, "", t_1.split(separator, maxsplit=1)[0]
+            )
+            t2_left = re.sub(
+                self.__ARTICLES_REGEX, "", t_2.split(separator, maxsplit=1)[0]
+            )
+            t1_right = re.sub(
+                self.__ARTICLES_REGEX, "", t_1.split(separator, maxsplit=1)[-1]
+            )
+            t2_right = re.sub(
+                self.__ARTICLES_REGEX, "", t_2.split(separator, maxsplit=1)[-1]
+            )
+
+            return self.titles_equal_normalized(
+                t1_left, t2_left
+            ) or self.titles_equal_normalized(t1_right, t2_right)
 
         return (
-            self.titles_equal_normalized(t1_fuzzy, t2_fuzzy)
+            self.titles_equal_normalized(t_1, t_2)
+            or titles_equal_fuzzy_separator(":")
+            or titles_equal_fuzzy_separator(" - ")
             or (
                 edit_distance.SequenceMatcher(
                     a=self.normalize(t_1), b=self.normalize(t_2)
                 ).distance()
-                <= 2
-                and len(t_1) > 1
+                <= 3
+                and len(t_1) > 4
                 and not str.isdigit(t_1[-1])
                 and not str.isdigit(t_2[-1])
+                and not str.isdigit(self.roman_numeralize(t_1.split()[-1]))
+                and not str.isdigit(self.roman_numeralize(t_2.split()[-1]))
             )
+            or (len(t_1) > 15 and self.normalize(t_1) in self.normalize(t_2))
+            or (len(t_2) > 15 and self.normalize(t_2) in self.normalize(t_1))
             or self.pokemon_special_case(t_1, t_2)
+            or self.titles_equal_normalized(
+                re.sub(self.__POSSESSIVE_REGEX, "", t_1),
+                re.sub(self.__POSSESSIVE_REGEX, "", t_2),
+            )
         )
 
     def pokemon_special_case(self, t_1: str, t_2: str) -> bool:
@@ -201,10 +231,10 @@ class MatchValidator:
             A Romanized string
         """
         return (
-            string.replace("ō", "o")
-            .replace("ū", "u")
-            .replace("Ō", "O")
-            .replace("Ū", "U")
+            string.replace("ō", "ou")
+            .replace("ū", "uu")
+            .replace("Ō", "Ou")
+            .replace("Ū", "Uu")
         )
 
     def roman_numeralize(self, string: str, _max: int = 20) -> str:
@@ -253,10 +283,9 @@ class MatchValidator:
         normalized = "".join(
             filter(
                 str.isalnum,
-                unicodedata.normalize(
-                    "NFKD",
+                unidecode(
                     re.sub(
-                        r"( \([A-Za-z0-9]{4}\))",
+                        r"( (\(|\[)[^\(\)\[\]]+(\)|\]))$",
                         "",
                         html.unescape(
                             self.roman_numeralize(
@@ -280,7 +309,7 @@ class MatchValidator:
     def validate(
         self,
         game: ExcelGame,
-        title: str,
+        title: str | List[str],
         platforms: List[str] = None,
         release_years: List[int] = None,
         publishers: List[str] = None,
@@ -297,9 +326,18 @@ class MatchValidator:
             platforms: A list of platforms to verify
             release_years: A list of release years to verify
         """
-        normal_equal = self.titles_equal_normalized(game.title, title)
+        if isinstance(title, str):
+            normal_equal = self.titles_equal_normalized(game.title, title)
 
-        fuzzy_equal = normal_equal or self.titles_equal_fuzzy(game.title, title)
+            fuzzy_equal = normal_equal or self.titles_equal_fuzzy(game.title, title)
+        else:
+            normal_equal = any(
+                self.titles_equal_normalized(game.title, t) for t in title
+            )
+
+            fuzzy_equal = normal_equal or any(
+                self.titles_equal_fuzzy(game.title, t) for t in title
+            )
 
         if not fuzzy_equal:
             return ValidationInfo(matched=False)
@@ -307,7 +345,7 @@ class MatchValidator:
         platform_equal = (
             platforms is not None
             and any(platforms)
-            and self.verify_platform(game.platform.value, platforms)
+            and self.verify_platform(game.platform, platforms)
         )
 
         year_equal = (
@@ -317,7 +355,7 @@ class MatchValidator:
         )
 
         return ValidationInfo(
-            matched=normal_equal or self.titles_equal_fuzzy(game.title, title),
+            matched=normal_equal or fuzzy_equal,
             exact=normal_equal,
             platform_matched=platform_equal,
             date_matched=year_equal,
@@ -326,7 +364,7 @@ class MatchValidator:
             franchise_matched=self.verify_franchise(game.franchise, franchises),
         )
 
-    def verify_platform(self, platform: str, platforms: List[str]) -> bool:
+    def verify_platform(self, platform: ExcelPlatform, platforms: List[str]) -> bool:
         """Verifies whether a list of platforms contains a given platform.
 
         This method ensures that a given platform matches any platforms exactly
@@ -341,10 +379,11 @@ class MatchValidator:
         """
         if platforms is None or not any(platforms):
             return False
+
         return any(
             filter(
-                lambda p: p.lower() == platform.lower()
-                or p.lower() in PLATFORM_NAMES[platform.lower()],
+                lambda p: p.lower() == platform.value.lower()
+                or p.lower() in PLATFORM_NAMES[platform],
                 platforms,
             )
         )

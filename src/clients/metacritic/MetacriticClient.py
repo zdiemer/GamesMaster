@@ -15,7 +15,7 @@ class MetacriticClient(ClientBase):
     __API_KEY = "1MOZgmNFxvmljaQR1X9KAij9Mo4xAY3u"
 
     __BASE_FANDOM_METACRITIC_URL = (
-        "https://internal-prod.apigee.fandom.net/v1/xapi/composer/metacritic/pages"
+        "https://backend.metacritic.com/composer/metacritic/pages"
     )
 
     __BASE_METACRITIC_URL = "https://www.metacritic.com"
@@ -149,7 +149,7 @@ class MetacriticClient(ClientBase):
                     (
                         p["name"]
                         for p in search_item["platforms"]
-                        if validator.verify_platform(game.platform.value, [p["name"]])
+                        if validator.verify_platform(game.platform, [p["name"]])
                     ),
                     None,
                 )

@@ -142,7 +142,7 @@ class RomHackingClient(ClientBase):
 
     def __init__(self, validator: MatchValidator, config: Config = None):
         config = config or Config.create()
-        super().__init__(validator, config)
+        super().__init__(validator, config, spoof_headers=True)
 
     async def _make_request(self, route: str, params: Dict) -> str:
         return await self.get(

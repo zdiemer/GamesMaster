@@ -1,4 +1,5 @@
 """Views for the game_manager app."""
+
 import io
 import os
 
@@ -96,7 +97,7 @@ def index(request):
 
         # developer(s)
         if game.developers.all().count() > 0:
-            res += f'<div>Developed by: {", ".join(g.name for g in game.developers.all())}</div>'
+            res += f"<div>Developed by: {', '.join(g.name for g in game.developers.all())}</div>"
 
         # people
         devs = NotableDeveloper.objects.filter(game=game)
@@ -106,11 +107,11 @@ def index(request):
 
         # genres
         if game.genres.all().count() > 0:
-            res += f'<div><span>{", ".join(g.name for g in game.genres.all())}</span></div>'
+            res += f"<div><span>{', '.join(g.name for g in game.genres.all())}</span></div>"
 
         if game.modes.all().count() > 0:
             res += (
-                f'<div><span>{", ".join(g.mode for g in game.modes.all())}</span></div>'
+                f"<div><span>{', '.join(g.mode for g in game.modes.all())}</span></div>"
             )
 
         # releases
@@ -118,7 +119,7 @@ def index(request):
         for release in releases:
             platforms = release.platforms.all()
             publishers = release.publishers.all()
-            res += f'<div>&emsp;released on {release.release_date} for {" & ".join(plat.name for plat in platforms)} in {release.region.display_name} by {" & ".join(pub.name for pub in publishers)}</div>'
+            res += f"<div>&emsp;released on {release.release_date} for {' & '.join(plat.name for plat in platforms)} in {release.region.display_name} by {' & '.join(pub.name for pub in publishers)}</div>"
 
         res += "</div>"
 
@@ -150,10 +151,12 @@ class CompanyList(generics.ListCreateAPIView):
     queryset = Company.objects.all()
     serializer_class = CompanySerializer
 
+
 class CompanyDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = Company.objects.all()
     serializer_class = CompanySerializer
     lookup_field = "url_slug"
+
 
 class GenreList(generics.ListCreateAPIView):
     queryset = Genre.objects.all()
@@ -185,7 +188,9 @@ class GameList(generics.ListCreateAPIView):
 
         platform_filter = self.request.query_params.get("platform")
         if platform_filter:
-            queryset = queryset.filter(release__platforms__url_slug=platform_filter).distinct()
+            queryset = queryset.filter(
+                release__platforms__url_slug=platform_filter
+            ).distinct()
 
         franchise_filter = self.request.query_params.get("franchise")
         if franchise_filter:
@@ -197,8 +202,9 @@ class GameList(generics.ListCreateAPIView):
 
         publisher_filter = self.request.query_params.get("publisher")
         if publisher_filter:
-            queryset = queryset.filter(release__publishers__url_slug=publisher_filter).distinct()
-
+            queryset = queryset.filter(
+                release__publishers__url_slug=publisher_filter
+            ).distinct()
 
         return queryset.order_by("title")
 
@@ -229,6 +235,7 @@ class GameRelease(viewsets.ModelViewSet):
 #         queryset = self.queryset
 #         query_set = queryset.filter(release__game=pk)
 #         return query_set
+
 
 class GamePurchase(viewsets.ModelViewSet):
     queryset = Purchase.objects.all()

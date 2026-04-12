@@ -52,11 +52,14 @@ class CooptimusClient(ClientBase):
             game.title, self.__COOPTIMUS_PLATFORM_MAPPING[game.platform]
         )
 
+        if html is None:
+            return []
+
         soup = BeautifulSoup(html, "html.parser")
         return soup.find_all("game")
 
     async def result_to_match(
-        self, game: ExcelGame, result: Any
+        self, game: ExcelGame, result: Any, is_fallback: bool = False
     ) -> Optional[GameMatch]:
         title = result.title.getText().strip()
         release_years = None
@@ -110,3 +113,8 @@ class CooptimusClient(ClientBase):
             )
 
         return None
+
+    async def _manual_match_impl(self, game: ExcelGame) -> GameMatch | None:
+        cooptimus_url = input(f"Input the URL for {game.full_name}: ").lower().strip()
+
+        # Requires parsing HTML

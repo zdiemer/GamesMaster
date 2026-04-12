@@ -4,6 +4,7 @@ import os
 import requests
 import io
 
+
 def run():
     # Create a client with the MinIO server playground, its access key
     # and secret key.
@@ -24,11 +25,16 @@ def run():
         print("Bucket 'my-bucket' already exists")
 
     result = client.put_object(
-        bucket_name, "my-object", io.BytesIO(b"hello"), 5,
+        bucket_name,
+        "my-object",
+        io.BytesIO(b"hello"),
+        5,
     )
     print(
         "created {0} object; etag: {1}, version-id: {2}".format(
-            result.object_name, result.etag, result.version_id,
+            result.object_name,
+            result.etag,
+            result.version_id,
         ),
     )
 
@@ -38,12 +44,15 @@ def run():
     print(path)
     print(files)
 
-
     result = client.fput_object(
-        bucket_name, "0000", "/code/scripts_data/empty_art.png",
+        bucket_name,
+        "0000",
+        "/code/scripts_data/empty_art.png",
     )
     print(
         "created {0} object; etag: {1}, version-id: {2}".format(
-            result.object_name, result.etag, result.version_id,
+            result.object_name,
+            result.etag,
+            result.version_id,
         ),
     )

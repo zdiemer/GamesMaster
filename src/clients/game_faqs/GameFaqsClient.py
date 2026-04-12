@@ -5,19 +5,22 @@ game information, matching against desired inputs, and returning the
 matches as structured output.
 """
 
+import logging
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+import aiohttp.client_exceptions
 from bs4 import BeautifulSoup, element
 
 from clients import ClientBase, DatePart, RateLimit
 from config import Config
-from excel_game import ExcelGame
+from excel_game import ExcelGame, ExcelPlatform
 from game_match import GameMatch
-from match_validator import MatchValidator
+from match_validator import MatchValidator, ValidationInfo
 from .game_faqs_types import (
     GameFaqsCompany,
+    GameFaqsExpansion,
     GameFaqsFranchise,
     GameFaqsGame,
     GameFaqsGenre,
@@ -27,6 +30,81 @@ from .game_faqs_types import (
     GameFaqsRelease,
     GameFaqsReleaseStatus,
 )
+
+GAMEFAQS_PLATFORM_SHORT_NAME_TO_SLUG: Dict[str, str] = {
+    "APL2": "appleii",
+    "2600": "atari2600",
+    "5200": "atari5200",
+    "A800": "atari8bit",
+    "CVIS": "colecovision",
+    "INTV": "intellivision",
+    "AQU": "aquarius",
+    "MVIS": "microvision",
+    "O2": "odyssey2",
+    "SG1": "sg1000",
+    "TI": "ti99",
+    "VECX": "vectrex",
+    "VC20": "vic20",
+    "AM": "actionmax",
+    "7800": "atari7800",
+    "ST": "ast",
+    "FDS": "famicomds",
+    "ORIC": "oric1",
+    "ZX": "sinclair",
+    "AMI": "amiga",
+    "GB": "gameboy",
+    "GG": "gamegear",
+    "GEN": "genesis",
+    "HYP": "hyperscan",
+    "LA": "laser",
+    "MGD": "mega-duck",
+    "NGCD": "neogeocd",
+    "32X": "sega32x",
+    "SCD": "segacd",
+    "X68": "x68000",
+    "SAC": "superacan",
+    "TCD": "turbocd",
+    "PIP": "pippin",
+    "CL": "loopy",
+    "FMT": "fmtowns",
+    "GCOM": "gamecom",
+    "JAG": "jaguar",
+    "JCD": "jaguarcd",
+    "N64D": "n64dd",
+    "POS": "palmos",
+    "PLD": "playdia",
+    "SAT": "saturn",
+    "VBOY": "virtualboy",
+    "WS": "wonderswan",
+    "DC": "dreamcast",
+    "ERDR": "ereader",
+    "GC": "gamecube",
+    "GIZ": "gizmondo",
+    "NGE": "ngage",
+    "NGP": "ngpocket",
+    "PMM": "pokemon-mini",
+    "MOBI": "mobile",
+    "WOS": "palm-webos",
+    "X360": "xbox360",
+    "ZB": "zeebo",
+    "FIRE": "firetv",
+    "WIIU": "wii-u",
+    "WINM": "windows-mobile",
+    "XONE": "xboxone",
+    "AND": "android",
+    "ARC": "arcade",
+    "DED": "dedicated",
+    "EVC": "evercade",
+    "IOS": "iphone",
+    "LNX": "unixlinux",
+    "MQ": "meta-quest",
+    "NS": "switch",
+    "NS2": "switch-2",
+    "WEB": "webonly",
+    "PD": "playdate",
+    "STA": "stadia",
+    "XBSX": "xbox-series-x",
+}
 
 
 class GameFaqsClient(ClientBase):
@@ -42,118 +120,20 @@ class GameFaqsClient(ClientBase):
         __PERCENT_CHANCE_DISGUISE_TRAFFIC: A percent chance to make a disguised request
     """
 
+    guide_cache: Dict[str, Any] = {}
+
     __BASE_GAMEFAQS_URL = "https://gamefaqs.gamespot.com"
-    __PLATFORM_TO_URL_PART = {
-        "3do": "3do",
-        "amstrad cpc": "cpc",
-        "android": "android",
-        "apple ii": "appleii",
-        "arcade": "arcade",
-        "atari 2600": "atari2600",
-        "atari 7800": "atari7800",
-        "atari 8-bit": "atari8bit",
-        "atari jaguar": "jaguar",
-        "atari lynx": "lynx",
-        "atari st": "ast",
-        "bbc micro": "bbc",
-        "bs-x": "snes",
-        "browser": "webonly",
-        "colecovision": "colecovision",
-        "commodore 64": "c64",
-        "commodore amiga": "amiga",
-        "commodore amiga cd32": "cd32",
-        "commodore vic-20": "vic20",
-        "dsiware": "ds",
-        "dedicated console": "dedicated",
-        "epoch super cassette vision": "scv",
-        "fm towns": "fmtowns",
-        "fm-7": "fm7",
-        "famicom disk system": "famicomds",
-        "game boy": "gameboy",
-        "game boy advance": "gba",
-        "game boy color": "gbc",
-        "game.com": "game.com",
-        "gamepark 32": "gp32",
-        "google stadia": "stadia",
-        "intellivision": "intellivision",
-        "j2me": "mobile",
-        "msx": "msx",
-        "msx2": "msx",
-        "mac os": "mac",
-        "n-gage": "ngage",
-        "n-gage 2.0": "ngage",
-        "nec pc-8801": "pc88",
-        "nec pc-9801": "pc98",
-        "nes": "nes",
-        "neo-geo": "neo",
-        "neo-geo cd": "neogeocd",
-        "neo-geo pocket": "ngpocket",
-        "neo-geo pocket color": "ngpc",
-        "new nintendo 3ds": "3ds",
-        "nintendo 3ds": "3ds",
-        "nintendo 64": "n64",
-        "nintendo 64dd": "n64dd",
-        "nintendo ds": "ds",
-        "nintendo dsi": "ds",
-        "nintendo gamecube": "gamecube",
-        "nintendo pokémon mini": "pokemon-mini",
-        "nintendo switch": "switch",
-        "nintendo wii": "wii",
-        "nintendo wii u": "wiiu",
-        "oculus quest": "meta-quest",
-        "ouya": "ouya",
-        "pc": "pc",
-        "pc-fx": "pcfx",
-        "pdp-10": "pc",
-        "philips cd-i": "cdi",
-        "pioneer laseractive": "laser",
-        "playstation": "ps",
-        "playstation 2": "ps2",
-        "playstation 3": "ps3",
-        "playstation 4": "ps4",
-        "playstation 5": "ps5",
-        "playstation portable": "psp",
-        "playstation vita": "vita",
-        "playstation network": "ps4",
-        "playdate": "playdate",
-        "snes": "snes",
-        "sega 32x": "sega32x",
-        "sega cd": "segacd",
-        "sega dreamcast": "dreamcast",
-        "sega game gear": "gamegear",
-        "sega genesis": "genesis",
-        "sega master system": "sms",
-        "sega sg-1000": "sg1000",
-        "sega saturn": "saturn",
-        "sharp x1": "x1",
-        "sharp x68000": "x68000",
-        "turbografx-16": "tg16",
-        "turbografx-cd": "turbocd",
-        "vectrex": "vectrex",
-        "virtual boy": "virtualboy",
-        "watara supervision": "svision",
-        "wiiware": "wii",
-        "wonderswan": "wonderswan",
-        "wonderswan color": "wsc",
-        "xbox": "xbox",
-        "xbox 360": "xbox360",
-        "xbox one": "xboxone",
-        "xbox series x|s": "xbox-series-x",
-        "zx spectrum": "sinclair",
-        "zeebo": "zeebo",
-        "ios": "iphone",
-        "trs-80 color computer": "coco",
-    }
 
     def __init__(self, validator: MatchValidator, config: Config = None):
         config = config or Config.create()
         super().__init__(
             validator,
             config,
-            RateLimit(per=DatePart.HOUR, range_req=(240, 600)),
+            RateLimit(per=DatePart.MINUTE, range_req=(10, 40)),
             spoof_headers=True,
             use_vpn=True,
             cycle_vpn_stasues=[401, 403, 429],
+            cycle_vpn_errors=[aiohttp.client_exceptions.ClientConnectorError],
         )
 
     async def _make_request(
@@ -175,7 +155,9 @@ class GameFaqsClient(ClientBase):
         Returns:
             A JSON object containing search results
         """
-        return await self._make_request("ajax/home_game_search", {"term": term})
+        return await self._make_request(
+            "ajax/home_game_search", {"term": self.validator.romanize(term)}
+        )
 
     async def game_page(self, url: str):
         """Request a game page using the specified URL.
@@ -219,8 +201,11 @@ class GameFaqsClient(ClientBase):
         """
         return await self._make_request(f"{url}/faqs", as_json=False)
 
-    async def __get_guides(self, url: str) -> List[GameFaqsGuide]:
+    async def __get_guides(self, url: str, has_guides: bool) -> List[GameFaqsGuide]:
         """Internal method for fetching all guides from a guides page"""
+        if not has_guides:
+            return []
+
         html = await self.guides_page(url)
 
         soup = BeautifulSoup(html, "html.parser")
@@ -243,14 +228,26 @@ class GameFaqsClient(ClientBase):
             title_elem = guide.find_next("div", {"class": "float_l"})
             if title_elem is not None:
                 gf_guide.title = str(title_elem.a.text).strip()
-                gf_guide.url = f'{self.__BASE_GAMEFAQS_URL}{title_elem.a["href"]}'
+                gf_guide.url = f"{self.__BASE_GAMEFAQS_URL}{title_elem.a['href']}"
 
-                gf_guide.author_name = str(title_elem.span.a.text).strip()
-                gf_guide.author_url = (
-                    f'{self.__BASE_GAMEFAQS_URL}{title_elem.span.a["href"]}'
+                incomplete_span = title_elem.find("span", {"class": "ital"})
+
+                gf_guide.incomplete = (
+                    incomplete_span is not None
+                    and "Incomplete" in str(incomplete_span.text)
                 )
 
-                flair_elem = title_elem.find_next_sibling("span", {"class": "flair"})
+                author_span = title_elem.find(
+                    "span", {"style": "font-size:12px;font-weight:normal;"}
+                )
+
+                if author_span is not None:
+                    gf_guide.author_name = str(author_span.a.text).strip()
+                    gf_guide.author_url = (
+                        f"{self.__BASE_GAMEFAQS_URL}{author_span.a['href']}"
+                    )
+
+                flair_elem = title_elem.find_next("span", {"class": "flair"})
                 if flair_elem is not None:
                     gf_guide.html = str(flair_elem.text).strip() == "HTML"
 
@@ -260,10 +257,20 @@ class GameFaqsClient(ClientBase):
                 if vers_string.startswith("v"):
                     gf_guide.version = vers_string
 
-                if version_elem.span.has_attr("title"):
-                    gf_guide.updated_date = datetime.strptime(
-                        version_elem.span["title"], "%m/%d/%Y"
-                    )
+                if version_elem.span is not None and version_elem.span.has_attr(
+                    "title"
+                ):
+                    try:
+                        gf_guide.updated_date = datetime.strptime(
+                            version_elem.span["title"], "%m/%d/%Y"
+                        )
+                    except ValueError:
+                        logging.warning(
+                            "Failed to parse updated date for %s by %s (%s)",
+                            gf_guide.title,
+                            gf_guide.author_name,
+                            gf_guide.url,
+                        )
 
             accolade_elem = guide.find_next("div", {"class": "meta float_l bold ital"})
             if accolade_elem is not None:
@@ -277,41 +284,172 @@ class GameFaqsClient(ClientBase):
                     faq_of_the_month = datetime.strptime(
                         accolade.split(":")[1].strip(), "%B %Y*"
                     )
-                    gf_guide.faq_of_the_month_month = datetime.strftime(
-                        faq_of_the_month.month, "%B"
-                    )
+                    gf_guide.faq_of_the_month_month = faq_of_the_month.strftime("%B")
                     gf_guide.faq_of_the_month_year = faq_of_the_month.year
+
+            header = guide.find_previous("div", {"class": "head"})
 
             if (
                 not gf_guide.html
                 and gf_guide.url is not None
-                and not (gf_guide.title or "").endswith("Map")
+                and (header is None or "Guides" in header.text.strip())
             ):
-                game_guide = await self.get(gf_guide.url, json=False)
-                soup = BeautifulSoup(game_guide, "html.parser")
-                guide_contents = soup.find("div", {"id": "faqtext"})
+                if gf_guide.hash_id in self.guide_cache:
+                    logging.debug(
+                        "Serving %s by %s (%s) from cache",
+                        gf_guide.title,
+                        gf_guide.author_name,
+                        gf_guide.url,
+                    )
+                    gf_guide.full_text = self.guide_cache[gf_guide.hash_id]
+                else:
+                    try:
+                        game_guide = await self.get(gf_guide.url, json=False)
+                    except UnicodeDecodeError:
+                        logging.debug(
+                            "Failed to decode %s by %s (%s)",
+                            gf_guide.title,
+                            gf_guide.author_name,
+                            gf_guide.url,
+                        )
+                        game_guide = None
 
-                if guide_contents is not None:
-                    gf_guide.full_text = guide_contents.get_text(" ").strip()
+                    if game_guide is not None:
+                        soup = BeautifulSoup(game_guide, "html.parser")
+                        guide_contents = soup.find("div", {"id": "faqtext"})
+
+                        if guide_contents is not None:
+                            gf_guide.full_text = guide_contents.get_text(" ").strip()
+
+                    self.guide_cache[gf_guide.hash_id] = gf_guide.full_text
 
             guides.append(gf_guide)
 
         return guides
 
-    async def __get_gamefaqs_game(self, match: Dict, platform: str) -> GameFaqsGame:
+    async def __get_gamefaqs_games(
+        self,
+        game: ExcelGame,
+        match: Dict,
+        platform: ExcelPlatform,
+        fetch_dlc: bool = False,
+        virtual_console: bool = False,
+    ) -> List[GameFaqsGame]:
         """Internal method for fetching info on a game from a game page"""
-        url = match["board_url"].replace(
-            "boards", self.__PLATFORM_TO_URL_PART[platform.lower()]
-        )[1:]
-
+        url = match["url"][1:]
         html_doc = await self.game_page(url)
 
         soup = BeautifulSoup(html_doc, "html.parser")
+
+        current_platform = soup.find("span", {"class": "header_more"}).text.strip()
+        plat_select = soup.find("div", {"class": "contrib_jumper"})
+
+        other_platforms = plat_select.find_all("option") if plat_select else []
+
+        gf_games: List[GameFaqsGame] = []
+
+        should_skip_linux = (
+            platform == ExcelPlatform.PC
+            and current_platform == "Linux"
+            and other_platforms is not None
+        )
+
+        has_guides = bool(int(match["has_guides"]))
+
+        if not should_skip_linux and (
+            virtual_console
+            or self.validator.verify_platform(platform, [current_platform])
+        ):
+            gf_games.append(
+                await self.__get_gamefaqs_game(
+                    html_doc, match["game_id"], url, has_guides
+                )
+            )
+
+        def sluggify(game_name: str) -> str:
+            return " ".join(
+                re.sub(r"[^\w\s]", "", game_name).strip().lower().split()
+            ).replace(" ", "-")
+
+        def platform_to_slug(p: str) -> str:
+            """Convert a platform name to a slug for URL matching."""
+            return GAMEFAQS_PLATFORM_SHORT_NAME_TO_SLUG.get(p.upper(), sluggify(p))
+
+        url_matches: Dict[str, ValidationInfo] = {}
+        exact_match_url: Optional[str] = None
+        exact_match_id: Optional[int] = None
+
+        for platform_elem in other_platforms:
+            name, gf_platform = platform_elem.text.strip()[:-1].rsplit(" (", maxsplit=1)
+
+            if platform == ExcelPlatform.PC and gf_platform == "LNX":
+                continue
+
+            platform_url = f"{platform_to_slug(gf_platform)}/{platform_elem['value']}-{sluggify(name)}"
+
+            v_info = self.validator.validate(
+                game,
+                name,
+                [gf_platform],
+            )
+
+            if v_info.exact and v_info.platform_matched:
+                exact_match_url = platform_url
+                exact_match_id = platform_elem["value"]
+                break
+
+            url_matches[platform_url] = v_info
+
+        if exact_match_url:
+            return [
+                await self.__get_gamefaqs_game(
+                    await self.game_page(exact_match_url),
+                    int(exact_match_id),
+                    exact_match_url,
+                    has_guides,
+                )
+            ]
+
+        for url, validation_info in url_matches.items():
+            if virtual_console or validation_info.likely_match:
+                gf_games.append(
+                    await self.__get_gamefaqs_game(
+                        await self.game_page(url),
+                        int(url.split("/")[-1].split("-")[0]),
+                        url,
+                        has_guides,
+                    )
+                )
+
+        if fetch_dlc:
+            expansions: List[GameFaqsGame] = []
+            for gf_game in gf_games:
+                for gf_game_expansion in gf_game.expansions:
+                    url = gf_game_expansion.url[1:]
+                    expansions.append(
+                        await self.__get_gamefaqs_game(
+                            await self.game_page(url),
+                            int(url.split("/")[-1].split("-")[0]),
+                            url,
+                            False,
+                        )
+                    )
+
+            gf_games.extend(expansions)
+
+        return gf_games
+
+    async def __get_gamefaqs_game(
+        self, html: Any, match_id: int, url: str, has_guides: bool
+    ) -> GameFaqsGame:
+        """Internal method for fetching info on a game from a game page"""
+        soup = BeautifulSoup(html, "html.parser")
+
         game_info = soup.find("div", {"class": "pod_gameinfo"})
         infos = game_info.find_all("div", {"class": "content"})
 
         gf_game = GameFaqsGame()
-        gf_game.id = int(match["game_id"])
+        gf_game.id = match_id
         gf_game.url = f"{self.__BASE_GAMEFAQS_URL}/{url}"
         gf_game.title = soup.find("h1", {"class": "page-title"}).text.strip()
 
@@ -337,7 +475,9 @@ class GameFaqsClient(ClientBase):
             elif label == "Also Known As:":
                 aliases = str(i.i.text).split("•")
                 gf_game.aliases = [
-                    re.sub(r" \(.*\)", "", alias).strip() for alias in aliases
+                    re.sub(r" \(.*\)$", "", alias).strip()
+                    for alias in aliases
+                    if alias.strip() != ""
                 ]
 
         rating_child = soup.find(id="gs_rate_avg")
@@ -383,8 +523,11 @@ class GameFaqsClient(ClientBase):
                     gf_game.user_length_hours_count = int(results.group("count"))
 
         html_doc = await self.release_data_page(url)
-        soup = BeautifulSoup(html_doc, "html.parser")
-        release_elems = soup.find("table", {"class": "rdates"}).tbody.find_all("tr")
+        release_elems = []
+
+        if html_doc is not None:
+            soup = BeautifulSoup(html_doc, "html.parser")
+            release_elems = soup.find("table", {"class": "rdates"}).tbody.find_all("tr")
 
         releases: List[GameFaqsRelease] = []
 
@@ -430,35 +573,82 @@ class GameFaqsClient(ClientBase):
             releases.append(release)
 
         gf_game.releases = releases
-        # gf_game.guides = await self.__get_guides(url)
+
+        expansions_elem = soup.find("div", {"id": "dlc"})
+        expansions: List[GameFaqsExpansion] = []
+
+        if expansions_elem is not None:
+            for elem in expansions_elem.find_all("tr"):
+                try:
+                    expansion_year = int(elem.find_all("td")[-1].text.strip())
+                except ValueError:
+                    expansion_year = None
+
+                expansions.append(
+                    GameFaqsExpansion(
+                        elem.td.a.text.strip(), elem.td.a["href"], expansion_year
+                    )
+                )
+
+        gf_game.expansions = expansions
+        gf_game.guides = await self.__get_guides(url, has_guides)
 
         return gf_game
 
     async def get_results(self, game: ExcelGame) -> List[Any]:
         return await self.home_game_search(game.title)
 
-    async def result_to_match(
-        self, game: ExcelGame, result: Any
-    ) -> Optional[GameMatch]:
+    async def result_to_matches(
+        self, game: ExcelGame, result: Any, check_aliases: bool = False
+    ) -> List[GameMatch]:
         if result.get("footer"):
-            return None
+            return []
 
         if result.get("game_name") is None or result.get("plats") is None:
-            return None
+            return []
 
         match = self.validator.validate(
             game,
-            result["game_name"],
-            result["plats"].split(", "),
+            [result["game_name"], result["product_name"]],
+            [result["platform_url"], *result["plats"].split(", ")],
             [datetime.strptime(result["date_released"], "%Y-%m-%d").year],
         )
 
-        if match.likely_match:
-            gf_game = await self.__get_gamefaqs_game(result, game.platform.value)
+        matches: List[GameMatch] = []
 
-            if not match.date_matched:
-                match.date_matched = self.validator.verify_release_year(
-                    game.release_year,
+        if check_aliases or match.likely_match:
+            gf_games = await self.__get_gamefaqs_games(
+                game,
+                result,
+                game.platform,
+                game.dlc,
+                virtual_console=game.digital_platform
+                in (
+                    "Virtual Console",
+                    "Nintendo 3DS Ambassador Program",
+                )
+                or game.subscription_service == "Nintendo Switch Online"
+                or game.platform == ExcelPlatform.PLAYSTATION_NETWORK,
+            )
+
+            for gf_game in gf_games:
+                if any(m.is_guaranteed_match() for m in matches):
+                    break
+
+                if any(int(m.match_info.id) == int(gf_game.id) for m in matches):
+                    continue
+
+                match = self.validator.validate(
+                    game,
+                    [
+                        gf_game.title,
+                        *(gf_game.aliases or []),
+                        *(r.title for r in (gf_game.releases or [])),
+                    ],
+                    [
+                        gf_game.platform.name,
+                        *(r.distribution_or_barcode for r in (gf_game.releases or [])),
+                    ],
                     [
                         rel.release_year
                         for rel in filter(
@@ -469,20 +659,76 @@ class GameFaqsClient(ClientBase):
                     ],
                 )
 
-            match.publisher_matched = self.validator.verify_component(
-                game.publisher,
-                [r.publisher.name for r in (gf_game.releases or [])],
-            )
+                match.publisher_matched = self.validator.verify_component(
+                    game.publisher,
+                    [r.publisher.name for r in (gf_game.releases or [])],
+                )
 
-            match.developer_matched = self.validator.verify_component(
-                game.developer,
-                [gf_game.developer] if gf_game.developer is not None else None,
-            )
+                match.developer_matched = self.validator.verify_component(
+                    game.developer,
+                    [gf_game.developer] if gf_game.developer is not None else None,
+                )
 
-            match.franchise_matched = self.validator.verify_component(
-                game.franchise, [f.name for f in (gf_game.franchises or [])]
-            )
+                match.franchise_matched = self.validator.verify_component(
+                    game.franchise, [f.name for f in (gf_game.franchises or [])]
+                )
 
-            return GameMatch(gf_game.title, gf_game.url, gf_game.id, gf_game, match)
+                if match.likely_match:
+                    matches.append(
+                        GameMatch(
+                            gf_game.title, gf_game.url, gf_game.id, gf_game, match
+                        )
+                    )
 
-        return None
+        return matches
+
+    def should_skip(self, game: ExcelGame) -> bool:
+        return game.platform in (
+            ExcelPlatform.ACORN_ATOM,
+            ExcelPlatform.ACORN_ELECTRON,
+            ExcelPlatform.AMSTRAD_PCW,
+            ExcelPlatform.APPLE_III,
+            ExcelPlatform.ARDUBOY,
+            ExcelPlatform.COLECO_ADAM,
+            ExcelPlatform.COMMODORE_PLUS_4,
+            ExcelPlatform.DRAGON_32_64,
+            ExcelPlatform.EXIDY_SORCERER,
+            ExcelPlatform.GALAKSIJA,
+            ExcelPlatform.GAMATE,
+            ExcelPlatform.GP2X,
+            ExcelPlatform.GP2X_CAANOO,
+            ExcelPlatform.GP2X_WIZ,
+            ExcelPlatform.HARTUNG_GAME_MASTER,
+            ExcelPlatform.IPOD,
+            ExcelPlatform.MONON_COLOR,
+            ExcelPlatform.NEC_PC_6001,
+            ExcelPlatform.THUMBY,
+            ExcelPlatform.THUMBY_COLOR,
+            ExcelPlatform.TIMETOP_GAMEKING,
+            ExcelPlatform.TIMETOP_GAMEKING_III,
+            ExcelPlatform.TVOS,
+            ExcelPlatform.WATCHOS,
+        )
+
+    async def match_game(self, game: ExcelGame) -> List[GameMatch]:
+        results = await self.get_results(game)
+
+        matches: List[GameMatch] = []
+
+        for result in results:
+            if any(m.is_guaranteed_match() for m in matches):
+                break
+
+            matches.extend(await self.result_to_matches(game, result))
+
+        if not any(matches) or all(not m.is_guaranteed_match() for m in matches):
+            for result in results:
+                if any(m.is_guaranteed_match() for m in matches):
+                    break
+
+                for m in await self.result_to_matches(game, result, check_aliases=True):
+                    if any(_m.match_info.id == m.match_info.id for _m in matches):
+                        continue
+                    matches.append(m)
+
+        return matches

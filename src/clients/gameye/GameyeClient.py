@@ -67,7 +67,8 @@ class GameyeClient(ClientBase):
 
         while results["records"] is not None and len(results["records"]) == limit:
             offset += limit
-            yield await self.deep_search(title, offset, limit)
+            results = await self.deep_search(title, offset, limit)
+            yield results
 
     async def items(self, iid: int) -> Dict[str, Any]:
         return await self._make_request(f"items/{iid}")

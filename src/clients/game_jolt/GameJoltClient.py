@@ -26,21 +26,15 @@ class GameJoltClient(ClientBase):
         )
 
     def should_skip(self, game: ExcelGame) -> bool:
-        return game.platform != ExcelPlatform.PC or game.notes in (
-            "Steam",
-            "Epic Games Store",
-            "GOG",
-            "uPlay",
-            "Twitch",
-            "Amazon",
-            "Battle.net",
-        )
+        return game.platform != ExcelPlatform.PC or game.digital_platform != "Freeware"
 
     async def get_results(self, game: ExcelGame) -> List[Any]:
-        results = await self.search(game.title)
-        return (results.get("payload") or {}).get("games") or []
+        results = await self.search(game.title.replace(":", ""))
+        return ((results or {}).get("payload") or {}).get("games") or []
 
-    async def result_to_match(self, game: ExcelGame, result: Any) -> GameMatch | None:
+    async def result_to_match(
+        self, game: ExcelGame, result: Any, is_fallback: bool = False
+    ) -> GameMatch | None:
         developer = (result.get("developer") or {}).get("display_name") or None
 
         match = self.validator.validate(

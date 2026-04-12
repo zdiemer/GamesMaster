@@ -10,20 +10,34 @@ from match_validator import ValidationInfo
 class DataSource(Enum):
     """External data sources to be used for matching."""
 
-    GAME_FAQS = 1
-    GIANT_BOMB = 2
-    IGDB = 3
-    METACRITIC = 4
-    MOBY_GAMES = 5
-    ROM_HACKING = 6
-    STEAM = 7
-    HLTB = 8
-    PRICE_CHARTING = 9
-    VG_CHARTZ = 10
-    GAMEYE = 11
-    GAME_JOLT = 12
-    COOPTIMUS = 13
-    ARCADE_DATABASE = 14
+    GAME_FAQS = "GameFAQs"
+    GIANT_BOMB = "Giant Bomb"
+    IGDB = "IGDB"
+    METACRITIC = "Metacritic"
+    MOBY_GAMES = "Moby Games"
+    ROM_HACKING = "Rom Hacking"
+    STEAM = "Steam"
+    HLTB = "How Long to Beat"
+    IGN = "IGN"
+    PRICE_CHARTING = "Price Charting"
+    VG_CHARTZ = "VGChartz"
+    GAMEYE = "Gameye"
+    GAME_JOLT = "Game Jolt"
+    COOPTIMUS = "Co-Optimus"
+    ARCADE_DATABASE = "Arcade Database"
+    GAME_SPOT = "GameSpot"
+    VNDB = "VNDB"
+    THE_COVER_PROJECT = "The Cover Project"
+    VIDEO_GAMES_MUSEUM = "Video Games Museum"
+    GENERATION_MSX = "Generation MSX"
+    WIKIPEDIA = "Wikipedia"
+    ARDUBOY = "Arduboy"
+    ARCADE_HISTORY = "Arcade History"
+    FLASHPOINT = "Flashpoint"
+    THUMBY = "Thumby"
+    LAUNCHBOX = "LaunchBox"
+    UNIVERSAL_VIDEO_GAMES_LIST = "Universal Video Games List"
+    THE_INDEPENDENT_GAMES_WIKI = "The Independent Games Wiki"
 
     def __str__(self) -> str:
         return self.name
@@ -96,6 +110,9 @@ class GameMatchResult:
 
     def __repr__(self) -> str:
         return self.__str__()
+
+    def __hash__(self) -> int:
+        return hash(self.game.hash_id)
 
 
 class GameMatchResultSet:

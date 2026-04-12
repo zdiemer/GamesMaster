@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unicodedata
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Dict, List
 
 from clients import ClientBase, DatePart, RateLimit
@@ -27,7 +27,7 @@ class IgdbClient(ClientBase):
         self.__client_id = config.igdb_client_id
         self.__client_secret = config.igdb_client_secret
         self.__platforms = {}
-        self.__auth_expiration = datetime.utcnow() - timedelta(seconds=30)
+        self.__auth_expiration = datetime.now(UTC) - timedelta(seconds=30)
 
     async def _authorize(self):
         res = await self.post(
@@ -39,12 +39,12 @@ class IgdbClient(ClientBase):
             },
         )
         self.__access_token = res["access_token"]
-        self.__auth_expiration = datetime.utcnow() + timedelta(
+        self.__auth_expiration = datetime.now(UTC) + timedelta(
             seconds=res["expires_in"]
         )
 
     async def _make_request(self, route: str, data: str):
-        if datetime.utcnow() > self.__auth_expiration:
+        if datetime.now(UTC) > self.__auth_expiration:
             await self._authorize()
 
         return await self.post(
@@ -92,7 +92,13 @@ class IgdbClient(ClientBase):
         if not any(self.__platforms):
             await self._init_platforms()
 
-        processed_title = unicodedata.normalize("NFKD", game.title).replace('"', '\\"')
+        processed_title = unicodedata.normalize(
+            "NFKD",
+            game.title.replace("ū", "uu")
+            .replace("ō", "ou")
+            .replace("Ō", "Ou")
+            .replace("Ū", "Uu"),
+        ).replace('"', '\\"')
         search_data = f'search "{processed_title}"; fields alternative_names,id,name,platforms,genres,parent_game,url,release_dates,involved_companies,franchises;'.encode(
             "utf-8"
         )
@@ -100,7 +106,7 @@ class IgdbClient(ClientBase):
         return await self.games(search_data)
 
     async def result_to_match(
-        self, game: ExcelGame, result: unicodedata.Any
+        self, game: ExcelGame, result: unicodedata.Any, is_fallback: bool = False
     ) -> GameMatch | None:
         platforms = result.get("platforms") or []
 
@@ -114,7 +120,11 @@ class IgdbClient(ClientBase):
         ]
 
         for date_response in date_responses:
-            if len(date_response) != 1 or date_response[0].get("date") is None:
+            if (
+                date_response is None
+                or len(date_response) != 1
+                or date_response[0].get("date") is None
+            ):
                 continue
             release_years.append(datetime.fromtimestamp(date_response[0]["date"]).year)
 

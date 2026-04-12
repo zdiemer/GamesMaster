@@ -22,5 +22,5 @@ class LoggingColor(Enum):
 
 class LoggingDecorator:
     @staticmethod
-    def as_color(s: str, color: LoggingColor = LoggingColor.BRIGHT_WHITE) -> str:
+    def color(s: str, color: LoggingColor = LoggingColor.BRIGHT_WHITE) -> str:
         return f"{color.value}{s}\033[00m"

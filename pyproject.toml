@@ -1,0 +1,22 @@
+[project]
+name = "gamemaster"
+version = "0.1.0"
+description = "Used for scraping game information"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "roman>=5.2",
+    "Unidecode>=1.4.0",
+    "pytz>=2025.2",
+    "aiohttp>=3.13.2",
+    "fake-headers>=1.0.2",
+    "piapy>=0.2.0",
+    "edit-distance>=1.0.7",
+    "pandas>=2.3.3",
+    "psycopg2>=2.9.11",
+    "openpyxl>=3.1.5",
+    "styleframe>=4.2",
+    "wikipedia>=1.4.0",
+    "selenium>=4.39.0",
+    "steam>=1.4.4",
+]

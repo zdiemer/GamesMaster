@@ -7,7 +7,7 @@ from typing import AsyncGenerator, List
 
 from bs4 import BeautifulSoup
 
-from clients import ClientBase, DatePart, RateLimit
+from clients import ClientBase, DatePart, RateLimit, ResponseNotOkError
 from config import Config
 from excel_game import ExcelGame
 from game_match import GameMatch
@@ -19,7 +19,7 @@ from .HltbResult import HltbResult
 class HltbClient(ClientBase):
     __BASE_URL = "https://howlongtobeat.com"
     __GAME_URL = __BASE_URL + "/game"
-    __SEARCH_URL = __BASE_URL + "/api/search"
+    __SEARCH_URL = __BASE_URL + "/api/locate"
     __PAGE_SIZE = 20
 
     __version_string: str = None
@@ -28,84 +28,98 @@ class HltbClient(ClientBase):
         config = config or Config.create()
         super().__init__(validator, config, RateLimit(1, DatePart.SECOND))
 
+    async def __update_version_string(self):
+        main = await self.get(
+            self.__BASE_URL, headers=self.__htlb_headers(), json=False
+        )
+
+        soup = BeautifulSoup(main, "html.parser")
+        sources = soup.find_all("script")
+
+        build_manifest = next(
+            filter(
+                lambda s: s.has_attr("src")
+                and re.search(r"\/_next\/static\/.*\/_buildManifest\.js", s["src"])
+                is not None,
+                sources,
+            )
+        )
+
+        manifest = await self.get(
+            f"{self.__BASE_URL}{build_manifest['src']}",
+            headers=self.__htlb_headers(),
+            json=False,
+        )
+
+        submit_pattern = r"\"\/submit\":\[\"static\/css\/.*\.css\",\"(?P<submit>static\/chunks\/pages\/submit-[^\.]*\.js)\"\]"
+
+        match = re.search(submit_pattern, manifest)
+
+        if match is None:
+            raise ValueError
+
+        submit_script = await self.get(
+            f"{self.__BASE_URL}/_next/{match.group('submit')}",
+            headers=self.__htlb_headers(),
+            json=False,
+        )
+
+        version_pattern = r"\"\/api\/locate\/\"\.concat\(\"(?P<version>[^\"]*)\"\)\.concat\(\"(?P<version2>[^\"]*)\"\)"
+
+        match = re.search(version_pattern, submit_script)
+
+        if match is None:
+            raise ValueError
+
+        self.__version_string = match.group("version") + match.group("version2")
+
     async def search(
-        self, game: str, page: int = 1, page_size: int = __PAGE_SIZE
+        self, game: str, page: int = 1, page_size: int = __PAGE_SIZE, modifier: str = ""
     ) -> dict:
         if self.__version_string is None:
-            main = await self.get(
-                self.__BASE_URL, headers=self.__htlb_headers(), json=False
-            )
+            await self.__update_version_string()
 
-            soup = BeautifulSoup(main, "html.parser")
-            sources = soup.find_all("script")
-
-            build_manifest = next(
-                filter(
-                    lambda s: s.has_attr("src")
-                    and re.search(r"\/_next\/static\/.*\/_buildManifest\.js", s["src"])
-                    is not None,
-                    sources,
-                )
-            )
-
-            manifest = await self.get(
-                f"{self.__BASE_URL}{build_manifest['src']}",
-                headers=self.__htlb_headers(),
-                json=False,
-            )
-
-            submit_pattern = r"\"\/submit\":\[\"static\/css\/.*\.css\",\"(?P<submit>static\/chunks\/pages\/submit-[^\.]*\.js)\"\]"
-
-            match = re.search(submit_pattern, manifest)
-
-            if match is None:
-                raise ValueError
-
-            submit_script = await self.get(
-                f"{self.__BASE_URL}/_next/{match.group('submit')}",
-                headers=self.__htlb_headers(),
-                json=False,
-            )
-
-            version_pattern = r"\"\/api\/search\/\"\.concat\(\"(?P<version>[^\"]*)\"\)"
-
-            match = re.search(version_pattern, submit_script)
-
-            if match is None:
-                raise ValueError
-
-            self.__version_string = match.group("version")
-
-        return await self.post(
-            f"{self.__SEARCH_URL}/{self.__version_string}",
-            data=json.dumps(
-                {
-                    "searchType": "games",
-                    "searchTerms": [game],
-                    "searchPage": page,
-                    "size": page_size,
-                    "searchOptions": {
-                        "games": {
-                            "userId": 0,
-                            "platform": "",
-                            "sortCategory": "popular",
-                            "rangeCategory": "main",
-                            "rangeTime": {"min": None, "max": None},
-                            "gameplay": {"perspective": "", "flow": "", "genre": ""},
-                            "rangeYear": {"min": "", "max": ""},
-                            "modifier": "",
+        try:
+            return await self.post(
+                f"{self.__SEARCH_URL}/{self.__version_string}",
+                data=json.dumps(
+                    {
+                        "searchType": "games",
+                        "searchTerms": [game],
+                        "searchPage": page,
+                        "size": page_size,
+                        "searchOptions": {
+                            "games": {
+                                "userId": 0,
+                                "platform": "",
+                                "sortCategory": "popular",
+                                "rangeCategory": "main",
+                                "rangeTime": {"min": None, "max": None},
+                                "gameplay": {
+                                    "perspective": "",
+                                    "flow": "",
+                                    "genre": "",
+                                    "difficulty": "",
+                                },
+                                "rangeYear": {"min": "", "max": ""},
+                                "modifier": modifier,
+                            },
+                            "users": {"sortCategory": "postcount"},
+                            "lists": {"sortCategory": "follows"},
+                            "filter": "",
+                            "sort": 0,
+                            "randomizer": 0,
                         },
-                        "users": {"sortCategory": "postcount"},
-                        "lists": {"sortCategory": "follows"},
-                        "filter": "",
-                        "sort": 0,
-                        "randomizer": 0,
-                    },
-                    "useCache": False,
-                }
-            ),
-            headers=self.__htlb_headers(),
-        )
+                        "useCache": False,
+                    }
+                ),
+                headers=self.__htlb_headers(),
+            )
+        except ResponseNotOkError:
+            old_version = self.__version_string
+            await self.__update_version_string()
+            if old_version != self.__version_string:
+                return await self.search(game, page, page_size, modifier)
 
     async def game(self, game_id: int) -> any:
         return await self.get(
@@ -123,99 +137,56 @@ class HltbClient(ClientBase):
     async def __search_paginated(self, game: ExcelGame) -> AsyncGenerator[dict, None]:
         page = 1
 
-        results = await self.search(game.title, page=page)
+        results = await self.search(
+            game.title, page=page, modifier="hide_dlc" if not game.dlc else "only_dlc"
+        )
 
         yield results
 
         while page < results["pageTotal"]:
             page += 1
-            results = await self.search(game.title, page=page)
+            results = await self.search(
+                game.title,
+                page=page,
+                modifier="hide_dlc" if not game.dlc else "only_dlc",
+            )
             yield results
 
     def should_skip(self, game: ExcelGame) -> bool:
-        return game.completed or game.release_date is None
+        return game.release_date is None
 
     async def result_to_match(
-        self, game: ExcelGame, result: json.Any
+        self, game: ExcelGame, result: json.Any, is_fallback: bool = False
     ) -> GameMatch | None:
-        if result["comp_main"] == 0:
+        if result.get("comp_main", 0) == 0:
             return None
 
         match = self.validator.validate(
-            game, result["game_name"], release_years=[result["release_world"]]
+            game,
+            [result["game_name"], *result["game_alias"].split(", ")],
+            platforms=result["profile_platform"].split(", "),
+            release_years=[result["release_world"]],
         )
 
-        if match.matched:
-            html = await self.game(result["game_id"])
-            soup = BeautifulSoup(html, "html.parser")
-
-            platform_blocks = soup.find(
-                "div",
-                {"class": "GameSummary_profile_info__HZFQu GameSummary_medium___r_ia"},
+        if match.likely_match:
+            return GameMatch(
+                result["game_name"],
+                f"{self.__GAME_URL}/{result['game_id']}",
+                result["game_id"],
+                HltbResult(
+                    result["comp_main"],
+                    result["comp_plus"],
+                    result["comp_100"],
+                    result["comp_all"],
+                    result["comp_main_count"],
+                    result["comp_plus_count"],
+                    result["comp_100_count"],
+                    result["comp_all_count"],
+                ),
+                match,
             )
 
-            platforms = list(platform_blocks)[-1].getText().strip().split(", ")
-            match.platform_matched = self.validator.verify_platform(
-                game.platform.value, platforms
-            )
-
-            if not match.date_matched:
-                date_blocks = soup.find_all(
-                    "div", {"class": "GameSummary_profile_info__HZFQu"}
-                )
-
-                release_years = set()
-
-                for date_block in date_blocks:
-                    text = date_block.getText().strip()
-
-                    if (
-                        text.startswith("NA:")
-                        or text.startswith("EU:")
-                        or text.startswith("JP:")
-                    ):
-                        text = (
-                            text.replace("NA: ", "")
-                            .replace("EU: ", "")
-                            .replace("JP: ", "")
-                        )
-
-                        # Full Date
-                        try:
-                            parsed_date = datetime.datetime.strptime(text, "%B %d, %Y")
-                            release_years.add(parsed_date.year)
-                        except ValueError:
-                            pass
-
-                        # Year and Month
-                        try:
-                            parsed_date = datetime.datetime.strptime(text, "%B %Y")
-                            release_years.add(parsed_date.year)
-                        except ValueError:
-                            pass
-
-                        # Just Year
-                        try:
-                            parsed_year = int(text)
-                            release_years.add(parsed_year)
-                        except ValueError:
-                            pass
-
-                if any(release_years):
-                    match.date_matched = self.validator.verify_release_year(
-                        game.release_year, list(release_years)
-                    )
-
-            if match.likely_match:
-                return GameMatch(
-                    result["game_name"],
-                    f"{self.__GAME_URL}/{result['game_id']}",
-                    result["game_id"],
-                    HltbResult(result["comp_main"]),
-                    match,
-                )
-
-            return None
+        return None
 
     async def match_game(self, game: ExcelGame) -> List[GameMatch]:
         matches: List[GameMatch] = []

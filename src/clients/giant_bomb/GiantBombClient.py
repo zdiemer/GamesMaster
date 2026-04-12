@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 
 from clients import ClientBase, DatePart, RateLimit
 from config import Config
-from excel_game import ExcelGame
+from excel_game import ExcelGame, ExcelPlatform
 from game_match import GameMatch
 from match_validator import MatchValidator
 
@@ -20,7 +20,7 @@ class GiantBombClient(ClientBase):
             validator,
             config,
             RateLimit(
-                200,
+                198,
                 DatePart.HOUR,
                 rate_limit_per_route=True,
                 get_route_path=lambda s: urllib.parse.urlparse(s).path.split("/")[2],
@@ -69,16 +69,26 @@ class GiantBombClient(ClientBase):
 
     async def search(self, query: str) -> Any:
         return await self._make_request(
-            "search/", params={"query": query, "resources": "game"}
+            "search/",
+            params={
+                "query": query.replace("<", "")
+                .replace("ū", "uu")
+                .replace("ō", "ou")
+                .replace("Ō", "Ou")
+                .replace("Ū", "Uu"),
+                "resources": "game",
+            },
         )
 
-    async def get_release_years(self, game_id: int, platform: str) -> List[int]:
+    async def get_release_years(
+        self, game_id: int, platform: ExcelPlatform
+    ) -> List[int]:
         years = []
 
         releases = await self.releases(game_id)
 
-        for release in releases.get("results") or []:
-            release_platform = (release.get("platform") or {}).get("name")
+        for release in (releases or {}).get("results", []):
+            release_platform = release.get("platform", {}).get("name")
 
             if release_platform is None or not self.validator.verify_platform(
                 platform, [release_platform]
@@ -96,9 +106,11 @@ class GiantBombClient(ClientBase):
 
     async def get_results(self, game: ExcelGame) -> List[Any]:
         response = await self.search(game.title)
-        return response["results"]
+        return (response or {}).get("results", [])
 
-    async def result_to_match(self, game: ExcelGame, result: Any) -> GameMatch | None:
+    async def result_to_match(
+        self, game: ExcelGame, result: Any, is_fallback: bool = False
+    ) -> GameMatch | None:
         if result.get("platforms") is None:
             return None
 
@@ -122,7 +134,7 @@ class GiantBombClient(ClientBase):
             if not match.date_matched:
                 match.date_matched = self.validator.verify_release_year(
                     game.release_year,
-                    await self.get_release_years(result["id"], game.platform.value),
+                    await self.get_release_years(result["id"], game.platform),
                 )
 
             game_info = await self.game(result["guid"])
@@ -167,9 +179,7 @@ class GiantBombClient(ClientBase):
                     if not match.date_matched:
                         match.date_matched = self.validator.verify_release_year(
                             game.release_year,
-                            await self.get_release_years(
-                                result["id"], game.platform.value
-                            ),
+                            await self.get_release_years(result["id"], game.platform),
                         )
 
                     return GameMatch(

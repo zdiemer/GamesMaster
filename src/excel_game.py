@@ -6,6 +6,7 @@ of the Excel file.
 
 from __future__ import annotations
 
+import copy
 import datetime
 import hashlib
 import json
@@ -32,6 +33,10 @@ class ExcelRegion(Enum):
     SPAIN = "SP"
     TAIWAN = "TW"
     ITALY = "IT"
+    CHINA = "CN"
+    SWEDEN = "SE"
+    AUSTRALIA = "AU"
+    YUGOSLAVIA = "YU"
 
     def __str__(self) -> str:
         return self.name
@@ -43,12 +48,19 @@ class ExcelRegion(Enum):
 class ExcelPlatform(Enum):
     _3DO = "3DO"
     ACORN_ARCHIMEDES = "Acorn Archimedes"
+    ACORN_ATOM = "Acorn Atom"
     ACORN_ELECTRON = "Acorn Electron"
     ACTION_MAX = "Action Max"
+    AMAZON_FIRE_TV = "Amazon Fire TV"
     AMSTRAD_CPC = "Amstrad CPC"
+    AMSTRAD_PCW = "Amstrad PCW"
     ANDROID = "Android"
     APPLE_II = "Apple II"
+    APPLE_IIGS = "Apple IIGS"
+    APPLE_III = "Apple III"
     ARCADE = "Arcade"
+    ARCADIA_2001 = "Arcadia 2001"
+    ARDUBOY = "Arduboy"
     ATARI_2600 = "Atari 2600"
     ATARI_5200 = "Atari 5200"
     ATARI_7800 = "Atari 7800"
@@ -57,22 +69,35 @@ class ExcelPlatform(Enum):
     ATARI_JAGUAR_CD = "Atari Jaguar CD"
     ATARI_LYNX = "Atari Lynx"
     ATARI_ST = "Atari ST"
+    BANDAI_PIPPIN = "Bandai Pippin"
     BBC_MICRO = "BBC Micro"
     BREW = "BREW"
     BROWSER = "Browser"
     BS_X = "BS-X"
+    CASIO_LOOPY = "Casio Loopy"
+    COLECO_ADAM = "Coleco Adam"
     COLECOVISION = "ColecoVision"
     COMMODORE_64 = "Commodore 64"
     COMMODORE_AMIGA = "Commodore Amiga"
     COMMODORE_AMIGA_CD32 = "Commodore Amiga CD32"
+    COMMODORE_PET = "Commodore PET"
     COMMODORE_PLUS_4 = "Commodore Plus/4"
     COMMODORE_VIC_20 = "Commodore VIC-20"
     DEDICATED_CONSOLE = "Dedicated Console"
+    DOJA = "DoJa"
+    DRAGON_32_64 = "Dragon 32/64"
     DSIWARE = "DSiWare"
+    DVD_PLAYER = "DVD Player"
     EPOCH_SUPER_CASSETTE_VISION = "Epoch Super Cassette Vision"
+    E_READER = "e-Reader"
+    EVERCADE = "Evercade"
+    EXEN = "ExEn"
+    EXIDY_SORCERER = "Exidy Sorcerer"
     FAMICOM_DISK_SYSTEM = "Famicom Disk System"
     FM_TOWNS = "FM Towns"
     FM_7 = "FM-7"
+    GALAKSIJA = "Galaksija"
+    GAMATE = "Gamate"
     GAME_BOY = "Game Boy"
     GAME_BOY_ADVANCE = "Game Boy Advance"
     GAME_BOY_COLOR = "Game Boy Color"
@@ -80,10 +105,24 @@ class ExcelPlatform(Enum):
     GAMEPARK_32 = "GamePark 32"
     GIZMONDO = "Gizmondo"
     GOOGLE_STADIA = "Google Stadia"
+    GP2X = "GP2X"
+    GP2X_CAANOO = "GP2X Caanoo"
+    GP2X_WIZ = "GP2X Wiz"
+    HARTUNG_GAME_MASTER = "Hartung Game Master"
+    HYPERSCAN = "HyperScan"
     INTELLIVISION = "Intellivision"
     IOS = "iOS"
+    IPOD = "iPod"
     J2ME = "J2ME"
+    LASERDISC = "LaserDisc"
     MAC_OS = "Mac OS"
+    MAGNAVOX_ODYSSEY_2 = "Magnavox Odyssey 2"
+    MAINFRAME = "Mainframe"
+    MATTEL_AQUARIUS = "Mattel Aquarius"
+    MEGA_DUCK = "Mega Duck"
+    MICROVISION = "Microvision"
+    MONON_COLOR = "Monon Color"
+    MOPHUN = "Mophun"
     MSX = "MSX"
     MSX_TURBO_R = "MSX Turbo R"
     MSX2 = "MSX2"
@@ -106,16 +145,21 @@ class ExcelPlatform(Enum):
     NINTENDO_GAMECUBE = "Nintendo GameCube"
     NINTENDO_POKEMON_MINI = "Nintendo Pokémon mini"
     NINTENDO_SWITCH = "Nintendo Switch"
+    NINTENDO_SWITCH_2 = "Nintendo Switch 2"
     NINTENDO_WII = "Nintendo Wii"
     NINTENDO_WII_U = "Nintendo Wii U"
+    NUON = "Nuon"
     OCULUS_QUEST = "Oculus Quest"
+    ORIC = "Oric"
+    OS_2 = "OS/2"
     OUYA = "Ouya"
+    PALM_OS = "Palm OS"
     PC = "PC"
     PC_FX = "PC-FX"
-    PDP_10 = "PDP-10"
     PHILIPS_CD_I = "Philips CD-i"
     PIONEER_LASERACTIVE = "Pioneer LaserActive"
     PLAYDATE = "Playdate"
+    PLAYDIA = "Playdia"
     PLAYSTATION = "PlayStation"
     PLAYSTATION_2 = "PlayStation 2"
     PLAYSTATION_3 = "PlayStation 3"
@@ -124,6 +168,7 @@ class ExcelPlatform(Enum):
     PLAYSTATION_NETWORK = "PlayStation Network"
     PLAYSTATION_PORTABLE = "PlayStation Portable"
     PLAYSTATION_VITA = "PlayStation Vita"
+    R_ZONE = "R-Zone"
     RISC_PC = "Risc PC"
     SEGA_32X = "Sega 32X"
     SEGA_CD = "Sega CD"
@@ -131,13 +176,21 @@ class ExcelPlatform(Enum):
     SEGA_GAME_GEAR = "Sega Game Gear"
     SEGA_GENESIS = "Sega Genesis"
     SEGA_MASTER_SYSTEM = "Sega Master System"
+    SEGA_PICO = "Sega Pico"
     SEGA_SATURN = "Sega Saturn"
     SEGA_SG_1000 = "Sega SG-1000"
     SHARP_X1 = "Sharp X1"
     SHARP_X68000 = "Sharp X68000"
     SNES = "SNES"
+    SUPER_ACAN = "Super A'Can"
     SUPERGRAFX = "SuperGrafx"
+    SYMBIAN = "Symbian"
     TAPWAVE_ZODIAC = "Tapwave Zodiac"
+    THUMBY = "Thumby"
+    THUMBY_COLOR = "Thumby Color"
+    TI_99_4A = "TI-99/4A"
+    TIMETOP_GAMEKING = "Timetop GameKing"
+    TIMETOP_GAMEKING_III = "Timetop GameKing III"
     TRS_80_COLOR_COMPUTER = "TRS-80 Color Computer"
     TURBOGRAFX_16 = "TurboGrafx-16"
     TURBOGRAFX_CD = "TurboGrafx-CD"
@@ -147,6 +200,8 @@ class ExcelPlatform(Enum):
     WATARA_SUPERVISION = "Watara SuperVision"
     WATCHOS = "watchOS"
     WIIWARE = "WiiWare"
+    WINDOWS_MOBILE = "Windows Mobile"
+    WINDOWS_PHONE = "Windows Phone"
     WONDERSWAN = "WonderSwan"
     WONDERSWAN_COLOR = "WonderSwan Color"
     XBOX = "Xbox"
@@ -290,6 +345,8 @@ class ExcelOwnedCondition(Enum):
     COMPLETE = "Complete"
     GAME_ONLY = "Game only"
     GAME_AND_BOX_ONLY = "Game and box only"
+    CASE_ONLY = "Case only"
+    MANUAL_ONLY = "Manual only"
 
     def __str__(self) -> str:
         return self.name
@@ -326,6 +383,7 @@ DigitalPlatformType = Literal[
     "Johren",
     "Legacy Games",
     "Mojang",
+    "Net Yaroze",
     "Nintendo 3DS Ambassador Program",
     "Oculus",
     "Origin",
@@ -333,6 +391,8 @@ DigitalPlatformType = Literal[
     "Pirated",
     "Playdate",
     "Playdate Catalog",
+    "Playdate Season 1",
+    "Playdate Season 2",
     "Square Enix",
     "Steam",
     "Super NES Classic Edition",
@@ -358,6 +418,7 @@ LimitedPrintCompanyType = Literal[
     "Fangamer",
     "Hard Copy Games",
     "iam8bit",
+    "Limited Rare Games",
     "Limited Run Games",
     "PixelHeart",
     "Play-Asia Exclusive",
@@ -368,7 +429,9 @@ LimitedPrintCompanyType = Literal[
 
 PhysicalMediaFormatType = Literal["LaserDisc"]
 
-RequiredAccessoryType = Literal["Adventure Player", "Nintendo Power"]
+RequiredAccessoryType = Literal[
+    "Adventure Player", "Nintendo Power", "Starpath Supercharger", "Super Scope"
+]
 
 
 class ExcelGame:
@@ -418,8 +481,13 @@ class ExcelGame:
     completion_time: Optional[float]
     fuzzy_date: Optional[FuzzyDateType]
     owned_condition: Optional[ExcelOwnedCondition]
+    date_started: Optional[datetime.datetime]
     date_completed: Optional[datetime.datetime]
     wishlisted: bool
+    playing_progress: Optional[float]
+    date_added: Optional[datetime.datetime]
+    file_size: Optional[int]
+    mame_romset: Optional[str]
 
     # Completion Metadata
 
@@ -501,9 +569,14 @@ class ExcelGame:
         completion_time: Optional[float] = None,
         fuzzy_date: Optional[FuzzyDateType] = None,
         owned_condition: Optional[ExcelOwnedCondition] = None,
+        date_started: Optional[datetime.datetime] = None,
         date_completed: Optional[datetime.datetime] = None,
         wishlisted: Optional[bool] = False,
         group_metadata: Optional[str] = None,
+        playing_progress: Optional[float] = None,
+        date_added: Optional[datetime.datetime] = None,
+        file_size: Optional[int] = None,
+        mame_romset: Optional[str] = None,
     ):
         self.id = int(_id)
         self.title = str(title) if title is not None else title
@@ -561,13 +634,18 @@ class ExcelGame:
         )
         self.fuzzy_date = fuzzy_date
         self.owned_condition = owned_condition
+        self.date_started = date_started
         self.date_completed = date_completed
         self.wishlisted = wishlisted is not None and bool(wishlisted)
         self.group_metadata = group_metadata
+        self.playing_progress = playing_progress
+        self.date_added = date_added
+        self.file_size = file_size
+        self.mame_romset = mame_romset
 
         self.compute_properties()
 
-    def compute_properties(self):
+    def compute_properties(self) -> ExcelGame:
         self.release_year = (
             self.release_date.year if self.release_date is not None else None
         )
@@ -704,6 +782,8 @@ class ExcelGame:
         if self.notes is not None:
             self.__process_notes()
 
+        return self
+
     def __process_notes(self):
         try:
             assert self.notes in get_args(DigitalPlatformType)
@@ -805,9 +885,18 @@ class ExcelGame:
             or self.notes == "Steelbook"
             or self.notes.endswith("Hits")
             or "Misprinted" in self.notes
+            or "Box Set" in self.notes
         ):
             self.owned_variant_types = [self.notes]
             return
+
+    def get_copy(self) -> ExcelGame:
+        return copy.copy(self)
+
+    def get_copy_with_metadata(self, group_metadata: str) -> ExcelGame:
+        g_copy = self.get_copy()
+        g_copy.group_metadata = group_metadata
+        return g_copy
 
     def __str__(self) -> str:
         return json.dumps(self.__dict__, sort_keys=True, indent=4, default=str)
@@ -860,7 +949,9 @@ class ExcelGameBuilder:
             )
             .with_owned_format(g1.owned_format or g2.owned_format)
             .with_completed(g1.completed or g2.completed)
+            .with_date_started(g1.date_started or g2.date_started)
             .with_date_completed(g1.date_completed or g2.date_completed)
+            .with_date_added(g1.date_added or g2.date_added)
             .with_completion_time(g1.completion_time or g2.completion_time)
             .with_rating(g1.rating or g2.rating)
             .with_metacritic_rating(g1.metacritic_rating or g2.metacritic_rating)
@@ -870,6 +961,7 @@ class ExcelGameBuilder:
             .with_wishlisted(g1.wishlisted or g2.wishlisted)
             .with_estimated_playtime(g1.estimated_playtime or g2.estimated_playtime)
             .with_playing_status(g1.playing_status or g2.playing_status)
+            .with_playing_progress(g1.playing_progress or g2.playing_progress)
             .with_playability(
                 g1.playability
                 if g1.playability != Playability.UNKNOWN
@@ -1024,9 +1116,13 @@ class ExcelGameBuilder:
         return self
 
     def with_date_purchased(
-        self, date_purchased: Optional[datetime.datetime]
+        self, date_purchased: Optional[datetime.datetime] | Optional[datetime.date]
     ) -> ExcelGameBuilder:
-        assert isinstance(date_purchased, datetime.datetime | None)
+        assert isinstance(date_purchased, datetime.datetime | datetime.date | None)
+        if isinstance(date_purchased, datetime.date):
+            date_purchased = datetime.datetime.combine(
+                date_purchased, datetime.time.min
+            )
         self._eg.date_purchased = date_purchased
         return self
 
@@ -1081,11 +1177,42 @@ class ExcelGameBuilder:
 
             return ExcelOwnedCondition.GAME_AND_BOX_ONLY
 
-    def with_date_completed(
-        self, date_completed: Optional[datetime.datetime]
+    def with_date_started(
+        self, date_started: Optional[datetime.datetime] | Optional[datetime.date]
     ) -> ExcelGameBuilder:
-        assert isinstance(date_completed, datetime.datetime | None)
+        try:
+            assert isinstance(date_started, datetime.datetime | datetime.date | None)
+        except AssertionError:
+            print(date_started)
+            raise
+
+        if isinstance(date_started, datetime.date):
+            date_started = datetime.datetime.combine(date_started, datetime.time.min)
+
+        self._eg.date_started = date_started
+        return self
+
+    def with_date_completed(
+        self, date_completed: Optional[datetime.datetime] | Optional[datetime.date]
+    ) -> ExcelGameBuilder:
+        assert isinstance(date_completed, datetime.datetime | datetime.date | None)
+
+        if isinstance(date_completed, datetime.date):
+            date_completed = datetime.datetime.combine(
+                date_completed, datetime.time.min
+            )
         self._eg.date_completed = date_completed
+        return self
+
+    def with_date_added(
+        self, date_added: Optional[datetime.datetime] | Optional[datetime.date]
+    ) -> ExcelGameBuilder:
+        assert isinstance(date_added, datetime.datetime | datetime.date | None)
+
+        if isinstance(date_added, datetime.date):
+            date_added = datetime.datetime.combine(date_added, datetime.time.min)
+
+        self._eg.date_added = date_added
         return self
 
     def with_wishlisted(self, wishlisted: Optional[bool]) -> ExcelGameBuilder:
@@ -1164,6 +1291,21 @@ class ExcelGameBuilder:
     ) -> ExcelGameBuilder:
         assert isinstance(address_on_order, str | None)
         self._eg.address_on_order = address_on_order
+        return self
+
+    def with_playing_progress(self, playing_progress: Optional[float]):
+        assert isinstance(playing_progress, float | None)
+        self._eg.playing_progress = playing_progress
+        return self
+
+    def with_file_size(self, file_size: Optional[int]):
+        assert isinstance(file_size, int | None)
+        self._eg.file_size = file_size
+        return self
+
+    def with_mame_romset(self, mame_romset: Optional[str]):
+        assert isinstance(mame_romset, str | None)
+        self._eg.mame_romset = mame_romset
         return self
 
     def build(self) -> ExcelGame:

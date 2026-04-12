@@ -15,6 +15,7 @@ class Config:
     igdb_client_secret: str
     steam_web_api_key: str
     price_charting_api_key: str
+    game_spot_api_key: str
     user_agent: str
 
     def __init__(
@@ -25,6 +26,7 @@ class Config:
         igdb_client_secret: str,
         steam_web_api_key: str,
         price_charting_api_key: str,
+        game_spot_api_key: str,
         version: str,
     ):
         self.moby_games_api_key = moby_games_api_key
@@ -33,6 +35,7 @@ class Config:
         self.igdb_client_secret = igdb_client_secret
         self.steam_web_api_key = steam_web_api_key
         self.price_charting_api_key = price_charting_api_key
+        self.game_spot_api_key = game_spot_api_key
         self.user_agent = f"GamesMaster/{version}"
 
     @staticmethod
@@ -45,10 +48,10 @@ class Config:
             A Config object
         """
         version = ""
-        with open("D:/Code/GameMaster/static/version", "r", encoding="utf-8") as file:
+        with open("E:/Code/GameMaster/static/version", "r", encoding="utf-8") as file:
             version = file.read()
         with open(
-            "D:/Code/GameMaster/static/config.json", "r", encoding="utf-8"
+            "E:/Code/GameMaster/static/config.json", "r", encoding="utf-8"
         ) as file:
             config = json.loads(file.read())
             return Config(
@@ -58,5 +61,6 @@ class Config:
                 config["igdbClientSecret"],
                 config["steamWebApiKey"],
                 config["priceChartingApiKey"],
+                config["gameSpotApiKey"],
                 version,
             )

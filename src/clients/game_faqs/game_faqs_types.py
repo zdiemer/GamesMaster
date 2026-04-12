@@ -6,6 +6,7 @@ concepts, e.g. platforms, genres, etc.
 """
 
 from __future__ import annotations
+import hashlib
 
 from datetime import datetime
 from enum import Enum
@@ -56,6 +57,12 @@ class GameFaqsGenre:
     def __repr__(self) -> str:
         return self.__str__()
 
+    @property
+    def full_name(self) -> str:
+        if self.parent_genre:
+            return f"{self.parent_genre.full_name} > {self.name}"
+        return self.name
+
 
 class GameFaqsCompany:
     """Class representing a company on GameFAQs.
@@ -88,6 +95,7 @@ class GameFaqsRegion(Enum):
     KO = "KO"
     AS = "AS"
     SA = "SA"
+    WW = "WW"
 
     def __str__(self) -> str:
         return self.name
@@ -208,10 +216,49 @@ class GameFaqsGuide:
     faq_of_the_month_year: Optional[int] = None
     incomplete: bool = False
 
+    __hash_id: Optional[str] = None
+
     def __str__(self) -> str:
         return str(self.__dict__)
 
     def __repr__(self) -> str:
+        return self.__str__()
+
+    @property
+    def hash_id(self) -> str:
+        if self.__hash_id is None:
+            self.__hash_id = hashlib.sha256(
+                str(
+                    (
+                        self.title,
+                        self.author_name,
+                        self.version,
+                        self.updated_date,
+                        self.url.split("/")[-1] if self.url else None,
+                        self.platform.name if self.platform else None,
+                    )
+                ).encode()
+            ).hexdigest()
+        return self.__hash_id
+
+    def __hash__(self) -> int:
+        return hash(self.hash_id)
+
+
+class GameFaqsExpansion:
+    name: str
+    url: str
+    year: int
+
+    def __init__(self, name: str, url: str, year: int):
+        self.name = name
+        self.url = url
+        self.year = year
+
+    def __str__(self) -> str:
+        return str(self.__dict__)
+
+    def __repr__(self):
         return self.__str__()
 
 
@@ -255,6 +302,7 @@ class GameFaqsGame:
     user_length_hours_count: Optional[int] = None
     guides: Optional[List[GameFaqsGuide]] = None
     aliases: Optional[List[str]] = None
+    expansions: Optional[List[GameFaqsExpansion]] = None
 
     def __str__(self) -> str:
         return str(self.__dict__)
